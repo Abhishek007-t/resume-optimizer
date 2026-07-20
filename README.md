@@ -1,0 +1,2 @@
+# resume-optimizer
+AI-Powered Resume Analyzer &amp; Job Matcher built with MERN
