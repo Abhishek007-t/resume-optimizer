@@ -1,0 +1,25 @@
+/* Toast overrides for dark theme */
+.Toastify__toast-container {
+  z-index: 99999;
+}
+
+.Toastify__toast {
+  background: #1a1a2e !important;
+  color: #e0e0e0 !important;
+  border: 1px solid rgba(255, 255, 255, 0.1) !important;
+  border-radius: 0.75rem !important;
+  backdrop-filter: blur(16px);
+}
+
+.Toastify__close-button {
+  color: #a0a0b0 !important;
+}
+
+.Toastify__progress-bar {
+  background: linear-gradient(90deg, #6C63FF, #00D4AA) !important;
+}
+
+/* Page transition */
+.page-enter {
+  animation: slideUp 0.4s ease-out;
+}

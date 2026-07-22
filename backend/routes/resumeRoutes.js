@@ -7,7 +7,12 @@ const upload = require("../middleware/upload");
 
 const {
   uploadResume,
+  getMyResumes,
+  getResumeById,
 } = require("../controllers/resumeController");
+
+router.get("/", auth, getMyResumes);
+router.get("/:id", auth, getResumeById);
 
 router.post(
   "/upload",
