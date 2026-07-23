@@ -1,6 +1,7 @@
 const Resume = require("../models/Resume");
 const Analysis = require("../models/Analysis");
 const geminiService = require("../services/geminiService");
+const { checkParseability } = require("../utils/parseabilityChecker");
 
 const analyzeResume = async (req, res) => {
   try {
@@ -29,12 +30,19 @@ const analyzeResume = async (req, res) => {
     // Call Gemini AI via service
     const result = await geminiService.analyzeResume(resume.extractedText);
 
+    // Deterministic, non-AI check for whether a real rule-based ATS parser
+    // could actually read this file — independent of the AI's content judgment.
+    const parseability = checkParseability(resume.extractedText);
+    result.parseability = parseability;
+
     // Save analysis to database
     const savedAnalysis = await Analysis.create({
       user: req.user.id,
       resumeId: resume._id,
       type: "analysis",
       atsScore: result.atsScore || 0,
+      scoreBreakdown: result.scoreBreakdown,
+      parseability,
       strengths: result.strengths || [],
       weaknesses: result.weaknesses || [],
       improvements: result.improvements || [],

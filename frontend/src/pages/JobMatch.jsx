@@ -1,13 +1,16 @@
-import { useState, useEffect } from "react";
-import { matchJob } from "../services/aiService";
+import { useState, useEffect, useRef } from "react";
+import { useNavigate } from "react-router-dom";
+import { matchJob, extractJobDescription } from "../services/aiService";
 import { getResumes } from "../services/resumeService";
 import { toast } from "react-toastify";
+import { scoreColor } from "../constants/colors";
+import { Paperclip, Target, Pencil, CheckCircle2, XCircle, BookOpen, ThumbsUp, Check, AlertTriangle, Rocket, ClipboardList } from "lucide-react";
 
 function ScoreCircle({ score, label = "Match Score" }) {
   const radius = 45;
   const circumference = 2 * Math.PI * radius;
   const offset = circumference - (score / 100) * circumference;
-  const color = score >= 70 ? "#00D4AA" : score >= 50 ? "#FFB347" : "#FF6B6B";
+  const color = scoreColor(score);
 
   return (
     <div className="flex flex-col items-center">
@@ -22,7 +25,7 @@ function ScoreCircle({ score, label = "Match Score" }) {
           style={{ animation: "scoreFill 1.5s ease-out" }}
         />
         <text x="50" y="46" textAnchor="middle" fill={color} fontSize="22" fontWeight="800">{score}</text>
-        <text x="50" y="62" textAnchor="middle" fill="#a0a0b0" fontSize="8">{label}</text>
+        <text x="50" y="62" textAnchor="middle" fill="#8B92A0" fontSize="8">{label}</text>
       </svg>
     </div>
   );
@@ -44,12 +47,15 @@ function RecommendationBadge({ recommendation }) {
 }
 
 function JobMatch() {
+  const navigate = useNavigate();
   const [resumes, setResumes] = useState([]);
   const [selectedResume, setSelectedResume] = useState("");
   const [jobDescription, setJobDescription] = useState("");
   const [result, setResult] = useState(null);
   const [loading, setLoading] = useState(false);
   const [resumesLoading, setResumesLoading] = useState(true);
+  const [extractingJd, setExtractingJd] = useState(false);
+  const jdFileInputRef = useRef(null);
 
   useEffect(() => {
     const fetchResumes = async () => {
@@ -68,6 +74,23 @@ function JobMatch() {
     };
     fetchResumes();
   }, []);
+
+  const handleJdFileChange = async (e) => {
+    const file = e.target.files?.[0];
+    e.target.value = "";
+    if (!file) return;
+
+    try {
+      setExtractingJd(true);
+      const data = await extractJobDescription(file);
+      setJobDescription(data.jobDescription);
+      toast.success("Job description extracted");
+    } catch (error) {
+      toast.error(error.response?.data?.message || "Couldn't read that file");
+    } finally {
+      setExtractingJd(false);
+    }
+  };
 
   const handleMatch = async () => {
     if (!selectedResume) { toast.warning("Please select a resume"); return; }
@@ -122,10 +145,27 @@ function JobMatch() {
           </div>
 
           <div>
-            <label className="block mb-2 text-sm font-medium text-text-secondary">Job Description</label>
+            <div className="flex items-center justify-between mb-2">
+              <label className="text-sm font-medium text-text-secondary">Job Description</label>
+              <button
+                type="button"
+                onClick={() => jdFileInputRef.current?.click()}
+                disabled={extractingJd}
+                className="text-xs text-primary hover:underline disabled:opacity-50"
+              >
+                {extractingJd ? "Reading file..." : <span className="inline-flex items-center gap-1"><Paperclip className="w-3 h-3" /> Upload JD (PDF)</span>}
+              </button>
+              <input
+                ref={jdFileInputRef}
+                type="file"
+                accept="application/pdf"
+                onChange={handleJdFileChange}
+                className="hidden"
+              />
+            </div>
             <textarea
               rows="8"
-              placeholder="Paste the complete job description here..."
+              placeholder="Paste the complete job description here, or upload a PDF..."
               value={jobDescription}
               onChange={(e) => setJobDescription(e.target.value)}
               className="w-full rounded-xl bg-bg-card border border-border p-4 text-text-primary placeholder-text-secondary/50 resize-none focus:border-primary focus:ring-2 focus:ring-primary/20"
@@ -142,7 +182,7 @@ function JobMatch() {
                 <span className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin-slow"></span>
                 Matching...
               </span>
-            ) : "🎯 Match Resume"}
+            ) : <span className="flex items-center justify-center gap-2"><Target className="w-4 h-4" /> Match Resume</span>}
           </button>
         </div>
       </div>
@@ -157,13 +197,24 @@ function JobMatch() {
               <h2 className="text-xl font-bold text-text-primary mb-2">Match Analysis</h2>
               <p className="text-text-secondary mb-3">{result.matchReasoning}</p>
               {result.recommendation && <RecommendationBadge recommendation={result.recommendation} />}
+              <div className="mt-4">
+                <button
+                  onClick={() => {
+                    localStorage.setItem("resumeId", selectedResume);
+                    navigate("/builder");
+                  }}
+                  className="px-5 py-2.5 rounded-xl bg-gradient-to-r from-primary to-primary-hover text-white font-semibold btn-glow text-sm inline-flex items-center gap-2"
+                >
+                  <Pencil className="w-4 h-4" /> Tailor for This Job in the Builder →
+                </button>
+              </div>
             </div>
           </div>
 
           {/* Matched Skills */}
           {result.matchedSkills?.length > 0 && (
             <div className="glass-card p-6 border-l-4 border-success">
-              <h3 className="text-lg font-bold text-success mb-3">✅ Matched Skills</h3>
+              <h3 className="text-lg font-bold text-success mb-3 flex items-center gap-2"><CheckCircle2 className="w-4 h-4" /> Matched Skills</h3>
               <div className="flex flex-wrap gap-2">
                 {result.matchedSkills.map((s, i) => (
                   <div key={i} className="tag-found flex items-center gap-1">
@@ -180,7 +231,7 @@ function JobMatch() {
           {/* Missing Skills */}
           {result.missingSkills?.length > 0 && (
             <div className="glass-card p-6 border-l-4 border-danger">
-              <h3 className="text-lg font-bold text-danger mb-3">❌ Missing Skills</h3>
+              <h3 className="text-lg font-bold text-danger mb-3 flex items-center gap-2"><XCircle className="w-4 h-4" /> Missing Skills</h3>
               <div className="space-y-2">
                 {result.missingSkills.map((s, i) => (
                   <div key={i} className="flex items-center justify-between bg-bg-card rounded-lg p-3">
@@ -193,7 +244,7 @@ function JobMatch() {
                       )}
                     </div>
                     {s.canBeLearned && (
-                      <span className="text-xs text-success">📚 Can be learned</span>
+                      <span className="text-xs text-success flex items-center gap-1"><BookOpen className="w-3.5 h-3.5" /> Can be learned</span>
                     )}
                   </div>
                 ))}
@@ -204,11 +255,11 @@ function JobMatch() {
           {/* Strengths */}
           {result.strengths?.length > 0 && (
             <div className="glass-card p-6 border-l-4 border-success">
-              <h3 className="text-lg font-bold text-success mb-3">💪 Strengths</h3>
+              <h3 className="text-lg font-bold text-success mb-3 flex items-center gap-2"><ThumbsUp className="w-4 h-4" /> Strengths</h3>
               <ul className="space-y-2">
                 {result.strengths.map((s, i) => (
                   <li key={i} className="flex items-start gap-2 text-text-primary text-sm">
-                    <span className="text-success mt-0.5">✓</span>
+                    <Check className="w-4 h-4 text-success mt-0.5 shrink-0" />
                     <span>{typeof s === 'string' ? s : s.toString()}</span>
                   </li>
                 ))}
@@ -219,7 +270,7 @@ function JobMatch() {
           {/* Weaknesses */}
           {result.weaknesses?.length > 0 && (
             <div className="glass-card p-6 border-l-4 border-warning">
-              <h3 className="text-lg font-bold text-warning mb-3">⚠️ Gaps</h3>
+              <h3 className="text-lg font-bold text-warning mb-3 flex items-center gap-2"><AlertTriangle className="w-4 h-4" /> Gaps</h3>
               <div className="space-y-3">
                 {result.weaknesses.map((w, i) => (
                   <div key={i} className="bg-bg-card rounded-lg p-3">
@@ -241,7 +292,7 @@ function JobMatch() {
           {/* Improvements */}
           {result.improvements?.length > 0 && (
             <div className="glass-card p-6 border-l-4 border-primary">
-              <h3 className="text-lg font-bold text-primary mb-3">🚀 Suggestions to Improve Match</h3>
+              <h3 className="text-lg font-bold text-primary mb-3 flex items-center gap-2"><Rocket className="w-4 h-4" /> Suggestions to Improve Match</h3>
               <ul className="space-y-2">
                 {result.improvements.map((imp, i) => (
                   <li key={i} className="flex items-start gap-2 text-text-primary text-sm">
@@ -256,7 +307,7 @@ function JobMatch() {
           {/* Final Verdict */}
           {result.finalVerdict && (
             <div className="glass-card p-6 bg-gradient-to-r from-primary/5 to-secondary/5">
-              <h3 className="text-lg font-bold gradient-text mb-3">📋 Final Verdict</h3>
+              <h3 className="text-lg font-bold gradient-text mb-3 flex items-center gap-2"><ClipboardList className="w-4 h-4" /> Final Verdict</h3>
               <p className="text-text-primary">{result.finalVerdict}</p>
             </div>
           )}

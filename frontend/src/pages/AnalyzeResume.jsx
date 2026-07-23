@@ -1,34 +1,13 @@
 import { useState, useEffect } from "react";
+import { useNavigate } from "react-router-dom";
+import { Sparkles, Pencil, Search, Check, BarChart3, ThumbsUp, AlertTriangle, KeyRound, Rocket, AlignLeft, CheckCircle2, ClipboardList } from "lucide-react";
 import { analyzeResume } from "../services/aiService";
 import { getResumes } from "../services/resumeService";
 import { toast } from "react-toastify";
-
-function ScoreCircle({ score, label = "ATS Score" }) {
-  const radius = 45;
-  const circumference = 2 * Math.PI * radius;
-  const offset = circumference - (score / 100) * circumference;
-  const color = score >= 70 ? "#00D4AA" : score >= 50 ? "#FFB347" : "#FF6B6B";
-
-  return (
-    <div className="flex flex-col items-center">
-      <svg width="140" height="140" viewBox="0 0 100 100">
-        <circle className="score-circle-bg" cx="50" cy="50" r={radius} />
-        <circle
-          className="score-circle-fill"
-          cx="50" cy="50" r={radius}
-          stroke={color}
-          strokeDasharray={circumference}
-          strokeDashoffset={offset}
-          style={{ animation: "scoreFill 1.5s ease-out" }}
-        />
-        <text x="50" y="46" textAnchor="middle" fill={color} fontSize="22" fontWeight="800">{score}</text>
-        <text x="50" y="62" textAnchor="middle" fill="#a0a0b0" fontSize="8">{label}</text>
-      </svg>
-    </div>
-  );
-}
+import ScoreCircle from "../components/ScoreCircle";
 
 function AnalyzeResume() {
+  const navigate = useNavigate();
   const [resumes, setResumes] = useState([]);
   const [selectedResume, setSelectedResume] = useState("");
   const [analysis, setAnalysis] = useState(null);
@@ -113,7 +92,7 @@ function AnalyzeResume() {
                 <span className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin-slow"></span>
                 Analyzing...
               </span>
-            ) : "🤖 Analyze Resume"}
+            ) : <span className="flex items-center gap-2"><Sparkles className="w-4 h-4" /> Analyze Resume</span>}
           </button>
         </div>
       </div>
@@ -123,21 +102,89 @@ function AnalyzeResume() {
         <div className="space-y-6 animate-slide-up">
           {/* Score + Summary */}
           <div className="glass-card p-8 flex flex-col md:flex-row items-center gap-8">
-            <ScoreCircle score={analysis.atsScore || 0} />
+            <ScoreCircle score={analysis.atsScore || 0} label="Quality Score" />
             <div className="flex-1 text-center md:text-left">
-              <h2 className="text-xl font-bold text-text-primary mb-2">ATS Score Analysis</h2>
-              <p className="text-text-secondary">{analysis.atsReasoning}</p>
+              <h2 className="text-xl font-bold text-text-primary mb-2">Resume Quality Score</h2>
+              <p className="text-text-secondary text-xs mb-2">AI judgment of content, keywords &amp; impact — not a parser simulation. See Parseability below for that.</p>
+              <p className="text-text-secondary mb-4">{analysis.atsReasoning}</p>
+              <button
+                onClick={() => {
+                  localStorage.setItem("resumeId", selectedResume);
+                  navigate("/builder");
+                }}
+                className="px-5 py-2.5 rounded-xl bg-gradient-to-r from-primary to-primary-hover text-white font-semibold btn-glow text-sm inline-flex items-center gap-2"
+              >
+                <Pencil className="w-4 h-4" /> Fix These in the Builder →
+              </button>
             </div>
           </div>
+
+          {/* Parseability — deterministic, non-AI check of whether a real ATS parser could read this file */}
+          {analysis.parseability && (
+            <div className={`glass-card p-6 border-l-4 ${analysis.parseability.score >= 80 ? "border-success" : analysis.parseability.score >= 50 ? "border-warning" : "border-danger"}`}>
+              <div className="flex items-center justify-between mb-1">
+                <h3 className="text-lg font-bold text-text-primary flex items-center gap-2"><Search className="w-4 h-4" /> Parseability</h3>
+                <span className={`text-sm font-bold ${analysis.parseability.score >= 80 ? "text-success" : analysis.parseability.score >= 50 ? "text-warning" : "text-danger"}`}>
+                  {analysis.parseability.score}/100
+                </span>
+              </div>
+              <p className="text-text-secondary text-xs mb-4">Rule-based check of whether a real ATS parser (not AI) could correctly read this file's layout and structure.</p>
+              {analysis.parseability.issues.length === 0 ? (
+                <p className="text-success text-sm flex items-center gap-1.5"><Check className="w-4 h-4" /> No structural red flags detected.</p>
+              ) : (
+                <div className="space-y-2">
+                  {analysis.parseability.issues.map((issue, i) => (
+                    <div key={i} className="bg-bg-card rounded-lg p-3">
+                      <div className="flex items-center gap-2 mb-1">
+                        <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${getSeverityClass(issue.severity)}`}>
+                          {issue.severity}
+                        </span>
+                      </div>
+                      <p className="text-text-primary text-sm">{issue.message}</p>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* Score Breakdown */}
+          {analysis.scoreBreakdown && (
+            <div className="glass-card p-6">
+              <h3 className="text-lg font-bold text-text-primary mb-4 flex items-center gap-2"><BarChart3 className="w-4 h-4" /> Score Breakdown</h3>
+              <div className="space-y-3">
+                {[
+                  ["Keyword Relevance", analysis.scoreBreakdown.keywordRelevance],
+                  ["Quantified Impact", analysis.scoreBreakdown.quantifiedImpact],
+                  ["Formatting Consistency", analysis.scoreBreakdown.formattingConsistency],
+                  ["Section Completeness", analysis.scoreBreakdown.sectionCompleteness],
+                  ["Clarity", analysis.scoreBreakdown.clarity],
+                ].map(([label, value]) => (
+                  <div key={label}>
+                    <div className="flex justify-between text-sm mb-1">
+                      <span className="text-text-secondary">{label}</span>
+                      <span className="text-text-primary font-medium">{value ?? 0}/20</span>
+                    </div>
+                    <div className="h-2 rounded-full bg-bg-card overflow-hidden">
+                      <div
+                        className="h-full rounded-full bg-gradient-to-r from-primary to-primary-hover"
+                        style={{ width: `${((value ?? 0) / 20) * 100}%` }}
+                      />
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
 
           {/* Strengths */}
           {analysis.strengths?.length > 0 && (
             <div className="glass-card p-6 border-l-4 border-success">
-              <h3 className="text-lg font-bold text-success mb-3">💪 Strengths</h3>
+              <h3 className="text-lg font-bold text-success mb-3 flex items-center gap-2"><ThumbsUp className="w-4 h-4" /> Strengths</h3>
               <ul className="space-y-2">
                 {analysis.strengths.map((s, i) => (
                   <li key={i} className="flex items-start gap-2 text-text-primary text-sm">
-                    <span className="text-success mt-0.5">✓</span>
+                    <Check className="w-4 h-4 text-success mt-0.5 shrink-0" />
                     <span>{typeof s === 'string' ? s : s.toString()}</span>
                   </li>
                 ))}
@@ -148,7 +195,7 @@ function AnalyzeResume() {
           {/* Weaknesses */}
           {analysis.weaknesses?.length > 0 && (
             <div className="glass-card p-6 border-l-4 border-danger">
-              <h3 className="text-lg font-bold text-danger mb-3">⚠️ Weaknesses</h3>
+              <h3 className="text-lg font-bold text-danger mb-3 flex items-center gap-2"><AlertTriangle className="w-4 h-4" /> Weaknesses</h3>
               <div className="space-y-3">
                 {analysis.weaknesses.map((w, i) => (
                   <div key={i} className="bg-bg-card rounded-lg p-3">
@@ -170,7 +217,7 @@ function AnalyzeResume() {
           {/* Missing Keywords */}
           {analysis.missingKeywords?.length > 0 && (
             <div className="glass-card p-6">
-              <h3 className="text-lg font-bold text-text-primary mb-3">🔑 Missing Keywords</h3>
+              <h3 className="text-lg font-bold text-text-primary mb-3 flex items-center gap-2"><KeyRound className="w-4 h-4" /> Missing Keywords</h3>
               <div className="flex flex-wrap gap-2">
                 {analysis.missingKeywords.map((kw, i) => (
                   <span key={i} className="tag-missing">{kw}</span>
@@ -182,7 +229,7 @@ function AnalyzeResume() {
           {/* Improvements */}
           {analysis.improvements?.length > 0 && (
             <div className="glass-card p-6 border-l-4 border-primary">
-              <h3 className="text-lg font-bold text-primary mb-3">🚀 Improvements</h3>
+              <h3 className="text-lg font-bold text-primary mb-3 flex items-center gap-2"><Rocket className="w-4 h-4" /> Improvements</h3>
               <div className="space-y-4">
                 {analysis.improvements.map((imp, i) => (
                   <div key={i} className="bg-bg-card rounded-lg p-4">
@@ -206,9 +253,10 @@ function AnalyzeResume() {
           {/* Formatting */}
           {analysis.formatting && (
             <div className="glass-card p-6">
-              <h3 className="text-lg font-bold text-text-primary mb-3">📝 Formatting</h3>
+              <h3 className="text-lg font-bold text-text-primary mb-3 flex items-center gap-2"><AlignLeft className="w-4 h-4" /> Formatting</h3>
               <div className={`flex items-center gap-2 mb-2 ${analysis.formatting.issueFound ? "text-warning" : "text-success"}`}>
-                <span>{analysis.formatting.issueFound ? "⚠️ Issues Found" : "✅ No Issues"}</span>
+                {analysis.formatting.issueFound ? <AlertTriangle className="w-4 h-4" /> : <CheckCircle2 className="w-4 h-4" />}
+                <span>{analysis.formatting.issueFound ? "Issues Found" : "No Issues"}</span>
               </div>
               <p className="text-text-secondary text-sm">{analysis.formatting.feedback}</p>
             </div>
@@ -217,7 +265,7 @@ function AnalyzeResume() {
           {/* Overall Feedback */}
           {analysis.overallFeedback && (
             <div className="glass-card p-6 bg-gradient-to-r from-primary/5 to-secondary/5">
-              <h3 className="text-lg font-bold gradient-text mb-3">📋 Overall Feedback</h3>
+              <h3 className="text-lg font-bold gradient-text mb-3 flex items-center gap-2"><ClipboardList className="w-4 h-4" /> Overall Feedback</h3>
               <p className="text-text-primary">{analysis.overallFeedback}</p>
             </div>
           )}

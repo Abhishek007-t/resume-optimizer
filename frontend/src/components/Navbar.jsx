@@ -10,11 +10,11 @@ function Navbar() {
     `px-3 py-2 rounded-lg text-sm font-medium transition-all duration-200 ${
       isActive
         ? "text-primary bg-primary/10 shadow-sm"
-        : "text-slate-300 hover:text-white hover:bg-white/5"
+        : "text-text-secondary hover:text-text-primary hover:bg-white/5"
     }`;
 
   return (
-    <header className="sticky top-0 z-50 bg-slate-900/80 backdrop-blur-xl border-b border-white/10">
+    <header className="sticky top-0 z-50 bg-bg-dark/80 backdrop-blur-xl border-b border-border">
       <div className="max-w-7xl mx-auto px-4 sm:px-6">
         <div className="flex items-center justify-between h-16">
           {/* Logo */}
@@ -28,6 +28,10 @@ function Navbar() {
             <NavLink to="/upload" className={linkClass}>Upload</NavLink>
             <NavLink to="/analyze" className={linkClass}>Analyze</NavLink>
             <NavLink to="/job-match" className={linkClass}>Job Match</NavLink>
+            <NavLink to="/interrogate" className={linkClass}>Interrogator</NavLink>
+            <NavLink to="/builder" className={linkClass}>Builder</NavLink>
+            <NavLink to="/mock-interview" className={linkClass}>Mock Interview</NavLink>
+            <NavLink to="/readiness" className={linkClass}>Readiness</NavLink>
           </nav>
 
           {/* Right side */}
@@ -48,7 +52,7 @@ function Navbar() {
           {/* Mobile hamburger */}
           <button
             onClick={() => setMobileOpen(!mobileOpen)}
-            className="md:hidden p-2 text-slate-300 hover:text-white"
+            className="md:hidden p-2 text-text-secondary hover:text-text-primary"
           >
             <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               {mobileOpen ? (
@@ -62,13 +66,17 @@ function Navbar() {
 
         {/* Mobile menu */}
         {mobileOpen && (
-          <div className="md:hidden pb-4 border-t border-white/10 mt-2 pt-3 animate-fade-in">
+          <div className="md:hidden pb-4 border-t border-border mt-2 pt-3 animate-fade-in">
             <nav className="flex flex-col gap-1">
               <NavLink to="/dashboard" className={linkClass} onClick={() => setMobileOpen(false)}>Dashboard</NavLink>
               <NavLink to="/upload" className={linkClass} onClick={() => setMobileOpen(false)}>Upload</NavLink>
               <NavLink to="/analyze" className={linkClass} onClick={() => setMobileOpen(false)}>Analyze</NavLink>
               <NavLink to="/job-match" className={linkClass} onClick={() => setMobileOpen(false)}>Job Match</NavLink>
-              <hr className="border-white/10 my-2" />
+              <NavLink to="/interrogate" className={linkClass} onClick={() => setMobileOpen(false)}>Interrogator</NavLink>
+              <NavLink to="/builder" className={linkClass} onClick={() => setMobileOpen(false)}>Builder</NavLink>
+              <NavLink to="/mock-interview" className={linkClass} onClick={() => setMobileOpen(false)}>Mock Interview</NavLink>
+              <NavLink to="/readiness" className={linkClass} onClick={() => setMobileOpen(false)}>Readiness</NavLink>
+              <hr className="border-border my-2" />
               {user && <span className="text-sm text-text-secondary px-3">Hi, {user.name}</span>}
               <button
                 onClick={() => { logout(); setMobileOpen(false); }}

@@ -1,4 +1,7 @@
 const Resume = require("../models/Resume");
+const Analysis = require("../models/Analysis");
+const ProjectInterrogation = require("../models/ProjectInterrogation");
+const InterviewSession = require("../models/InterviewSession");
 const fs = require("fs");
 const pdfParse = require("pdf-parse");
 
@@ -99,8 +102,45 @@ const getResumeById = async (req, res) => {
   }
 };
 
+const deleteResume = async (req, res) => {
+  try {
+    const resume = await Resume.findOne({ _id: req.params.id, user: req.user.id });
+
+    if (!resume) {
+      return res.status(404).json({
+        success: false,
+        message: "Resume not found",
+      });
+    }
+
+    // Clean up everything tied to this resume so nothing stale (a dangling
+    // analysis, interview session, or interrogation) survives the delete.
+    await Promise.all([
+      Analysis.deleteMany({ resumeId: resume._id, user: req.user.id }),
+      ProjectInterrogation.deleteMany({ resumeId: resume._id, user: req.user.id }),
+      InterviewSession.deleteMany({ resumeId: resume._id, user: req.user.id }),
+      Resume.deleteOne({ _id: resume._id }),
+    ]);
+
+    fs.unlink(resume.filePath, () => {});
+
+    res.status(200).json({
+      success: true,
+      message: "Resume deleted successfully",
+    });
+  } catch (error) {
+    console.error(error);
+
+    res.status(500).json({
+      success: false,
+      message: "Server Error",
+    });
+  }
+};
+
 module.exports = {
   uploadResume,
   getMyResumes,
   getResumeById,
+  deleteResume,
 };

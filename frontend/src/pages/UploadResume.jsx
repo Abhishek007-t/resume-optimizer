@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef } from "react";
 import { Link } from "react-router-dom";
-import { uploadResume, getResumes } from "../services/resumeService";
+import { CheckCircle2, FileText, Paperclip, X } from "lucide-react";
+import { uploadResume, getResumes, deleteResume } from "../services/resumeService";
 import { toast } from "react-toastify";
 
 function UploadResume() {
@@ -10,6 +11,7 @@ function UploadResume() {
   const [dragOver, setDragOver] = useState(false);
   const [resumes, setResumes] = useState([]);
   const [resumesLoading, setResumesLoading] = useState(true);
+  const [deletingId, setDeletingId] = useState(null);
   const fileInputRef = useRef(null);
 
   useEffect(() => {
@@ -65,6 +67,27 @@ function UploadResume() {
     }
   };
 
+  const handleDelete = async (resume) => {
+    const confirmed = window.confirm(
+      `Delete "${resume.originalName}"? This also removes its analyses, interview sessions, and project interrogations. This can't be undone.`
+    );
+    if (!confirmed) return;
+
+    try {
+      setDeletingId(resume._id);
+      await deleteResume(resume._id);
+      setResumes((prev) => prev.filter((r) => r._id !== resume._id));
+      if (localStorage.getItem("resumeId") === resume._id) {
+        localStorage.removeItem("resumeId");
+      }
+      toast.success("Resume deleted");
+    } catch (error) {
+      toast.error(error.response?.data?.message || "Failed to delete resume");
+    } finally {
+      setDeletingId(null);
+    }
+  };
+
   const formatSize = (bytes) => {
     if (bytes < 1024) return bytes + " B";
     if (bytes < 1048576) return (bytes / 1024).toFixed(1) + " KB";
@@ -81,7 +104,7 @@ function UploadResume() {
       <div className="glass-card p-8 mb-8">
         {success ? (
           <div className="text-center py-8 animate-slide-up">
-            <div className="text-6xl mb-4">✅</div>
+            <CheckCircle2 className="w-16 h-16 mb-4 text-success mx-auto" />
             <h2 className="text-2xl font-bold text-success mb-2">Upload Successful!</h2>
             <p className="text-text-secondary mb-6">Your resume is ready for analysis</p>
             <div className="flex flex-col sm:flex-row gap-3 justify-center">
@@ -112,7 +135,7 @@ function UploadResume() {
                 onChange={handleFileSelect}
                 className="hidden"
               />
-              <div className="text-5xl mb-4">📄</div>
+              <FileText className="w-12 h-12 mb-4 text-text-secondary mx-auto" />
               <p className="text-text-primary font-medium mb-2">
                 {file ? file.name : "Drag & drop your resume here"}
               </p>
@@ -121,12 +144,12 @@ function UploadResume() {
               </p>
               {file && (
                 <div className="mt-4 inline-flex items-center gap-2 px-4 py-2 bg-primary/10 rounded-lg border border-primary/30">
-                  <span className="text-primary text-sm font-medium">📎 {file.name}</span>
+                  <span className="text-primary text-sm font-medium flex items-center gap-1.5"><Paperclip className="w-3.5 h-3.5" /> {file.name}</span>
                   <button
                     type="button"
                     onClick={(e) => { e.stopPropagation(); setFile(null); }}
-                    className="text-danger hover:text-danger/80 text-sm"
-                  >✕</button>
+                    className="text-danger hover:text-danger/80"
+                  ><X className="w-3.5 h-3.5" /></button>
                 </div>
               )}
             </div>
@@ -162,7 +185,7 @@ function UploadResume() {
           {resumes.map((resume, idx) => (
             <div key={resume._id} className="glass-card p-4 flex items-center justify-between animate-slide-up" style={{ animationDelay: `${idx * 0.05}s` }}>
               <div className="flex items-center gap-3">
-                <span className="text-2xl">📄</span>
+                <FileText className="w-6 h-6 text-text-secondary" />
                 <div>
                   <p className="text-text-primary font-medium text-sm">{resume.originalName}</p>
                   <p className="text-text-secondary text-xs">
@@ -170,12 +193,21 @@ function UploadResume() {
                   </p>
                 </div>
               </div>
-              <button
-                onClick={() => { localStorage.setItem("resumeId", resume._id); toast.success("Resume selected!"); }}
-                className="px-3 py-1.5 text-xs font-medium text-primary hover:bg-primary/10 border border-primary/30 rounded-lg transition"
-              >
-                Select
-              </button>
+              <div className="flex items-center gap-2">
+                <button
+                  onClick={() => { localStorage.setItem("resumeId", resume._id); toast.success("Resume selected!"); }}
+                  className="px-3 py-1.5 text-xs font-medium text-primary hover:bg-primary/10 border border-primary/30 rounded-lg transition"
+                >
+                  Select
+                </button>
+                <button
+                  onClick={() => handleDelete(resume)}
+                  disabled={deletingId === resume._id}
+                  className="px-3 py-1.5 text-xs font-medium text-danger hover:bg-danger/10 border border-danger/30 rounded-lg transition disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  {deletingId === resume._id ? "…" : "Delete"}
+                </button>
+              </div>
             </div>
           ))}
         </div>

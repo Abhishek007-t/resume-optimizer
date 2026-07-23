@@ -25,6 +25,14 @@ const analysisSchema = new mongoose.Schema(
       required: true,
     },
 
+    scoreBreakdown: {
+      type: Object,
+    },
+
+    parseability: {
+      type: Object,
+    },
+
     strengths: {
       type: [String],
       default: [],

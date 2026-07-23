@@ -1,3 +1,5 @@
+const fs = require("fs");
+const pdfParse = require("pdf-parse");
 const Resume = require("../models/Resume");
 const Analysis = require("../models/Analysis");
 const geminiService = require("../services/geminiService");
@@ -60,6 +62,45 @@ const matchJob = async (req, res) => {
   }
 };
 
+// Extracts text from an uploaded job description PDF — pure text extraction,
+// no AI call, so it's free and instant. Nothing is persisted; the extracted
+// text is just handed back to fill the job description field.
+const extractJobDescription = async (req, res) => {
+  try {
+    if (!req.file) {
+      return res.status(400).json({
+        success: false,
+        message: "No file uploaded",
+      });
+    }
+
+    const dataBuffer = fs.readFileSync(req.file.path);
+    const pdfData = await pdfParse(dataBuffer);
+    fs.unlink(req.file.path, () => {});
+
+    if (!pdfData.text || !pdfData.text.trim()) {
+      return res.status(400).json({
+        success: false,
+        message: "Couldn't read any text from that file — it may be a scanned image without selectable text.",
+      });
+    }
+
+    res.status(200).json({
+      success: true,
+      jobDescription: pdfData.text.trim(),
+    });
+  } catch (error) {
+    if (req.file) fs.unlink(req.file.path, () => {});
+    console.error("Job Description Extraction Error:", error);
+    res.status(500).json({
+      success: false,
+      message: "Failed to read that job description file",
+      error: error.message,
+    });
+  }
+};
+
 module.exports = {
   matchJob,
+  extractJobDescription,
 };

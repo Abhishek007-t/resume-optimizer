@@ -9,10 +9,12 @@ const {
   uploadResume,
   getMyResumes,
   getResumeById,
+  deleteResume,
 } = require("../controllers/resumeController");
 
 router.get("/", auth, getMyResumes);
 router.get("/:id", auth, getResumeById);
+router.delete("/:id", auth, deleteResume);
 
 router.post(
   "/upload",

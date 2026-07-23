@@ -9,6 +9,10 @@ import Dashboard from "./pages/Dashboard";
 import UploadResume from "./pages/UploadResume";
 import AnalyzeResume from "./pages/AnalyzeResume";
 import JobMatch from "./pages/JobMatch";
+import ProjectInterrogator from "./pages/ProjectInterrogator";
+import ResumeBuilder from "./pages/ResumeBuilder";
+import MockInterview from "./pages/MockInterview";
+import ReadinessDashboard from "./pages/ReadinessDashboard";
 import NotFound from "./pages/NotFound";
 import ProtectedRoute from "./components/ProtectedRoute";
 import Navbar from "./components/Navbar";
@@ -50,6 +54,18 @@ function App() {
         } />
         <Route path="/job-match" element={
           <ProtectedRoute><Layout><JobMatch /></Layout></ProtectedRoute>
+        } />
+        <Route path="/interrogate" element={
+          <ProtectedRoute><Layout><ProjectInterrogator /></Layout></ProtectedRoute>
+        } />
+        <Route path="/builder" element={
+          <ProtectedRoute><Layout><ResumeBuilder /></Layout></ProtectedRoute>
+        } />
+        <Route path="/mock-interview" element={
+          <ProtectedRoute><Layout><MockInterview /></Layout></ProtectedRoute>
+        } />
+        <Route path="/readiness" element={
+          <ProtectedRoute><Layout><ReadinessDashboard /></Layout></ProtectedRoute>
         } />
 
         {/* 404 */}

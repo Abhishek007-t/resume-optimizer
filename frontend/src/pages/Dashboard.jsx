@@ -1,5 +1,6 @@
 import { useState, useEffect } from "react";
 import { Link } from "react-router-dom";
+import { FileText, Sparkles, BarChart3, Target, ClipboardList } from "lucide-react";
 import { useAuth } from "../context/AuthContext";
 import { getDashboardStats, getAnalysisHistory } from "../services/aiService";
 import { getResumes } from "../services/resumeService";
@@ -69,24 +70,24 @@ function Dashboard() {
       {/* Stats Row */}
       <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4 mb-8">
         <div className="stat-card">
-          <div className="text-3xl mb-2">📄</div>
+          <FileText className="w-7 h-7 mb-2 text-primary" />
           <p className="text-text-secondary text-sm">Total Resumes</p>
           <p className="text-2xl font-bold text-text-primary">{stats?.totalResumes || 0}</p>
         </div>
         <div className="stat-card">
-          <div className="text-3xl mb-2">🤖</div>
+          <Sparkles className="w-7 h-7 mb-2 text-primary" />
           <p className="text-text-secondary text-sm">Total Analyses</p>
           <p className="text-2xl font-bold text-text-primary">{stats?.totalAnalyses || 0}</p>
         </div>
         <div className="stat-card">
-          <div className="text-3xl mb-2">📊</div>
+          <BarChart3 className="w-7 h-7 mb-2 text-primary" />
           <p className="text-text-secondary text-sm">Average Score</p>
           <p className={`text-2xl font-bold ${
             (stats?.averageScore || 0) >= 70 ? "text-success" : (stats?.averageScore || 0) >= 50 ? "text-warning" : "text-danger"
           }`}>{stats?.averageScore || 0}%</p>
         </div>
         <div className="stat-card">
-          <div className="text-3xl mb-2">🎯</div>
+          <Target className="w-7 h-7 mb-2 text-primary" />
           <p className="text-text-secondary text-sm">Latest Score</p>
           <p className={`text-2xl font-bold ${
             (stats?.latestAnalysis?.atsScore || 0) >= 70 ? "text-success" : (stats?.latestAnalysis?.atsScore || 0) >= 50 ? "text-warning" : "text-danger"
@@ -98,17 +99,17 @@ function Dashboard() {
       <h2 className="text-xl font-bold text-text-primary mb-4">Quick Actions</h2>
       <div className="grid gap-4 sm:grid-cols-3 mb-8">
         <Link to="/upload" className="glass-card p-6 hover:bg-bg-card-hover transition-all group">
-          <div className="text-4xl mb-3 group-hover:scale-110 transition-transform">📄</div>
+          <FileText className="w-9 h-9 mb-3 text-primary group-hover:scale-110 transition-transform" />
           <h3 className="text-lg font-bold text-text-primary">Upload Resume</h3>
           <p className="text-text-secondary text-sm mt-1">Upload a PDF resume for AI analysis</p>
         </Link>
         <Link to="/analyze" className="glass-card p-6 hover:bg-bg-card-hover transition-all group">
-          <div className="text-4xl mb-3 group-hover:scale-110 transition-transform">🤖</div>
+          <Sparkles className="w-9 h-9 mb-3 text-primary group-hover:scale-110 transition-transform" />
           <h3 className="text-lg font-bold text-text-primary">Analyze Resume</h3>
           <p className="text-text-secondary text-sm mt-1">Get ATS score and improvement tips</p>
         </Link>
         <Link to="/job-match" className="glass-card p-6 hover:bg-bg-card-hover transition-all group">
-          <div className="text-4xl mb-3 group-hover:scale-110 transition-transform">🎯</div>
+          <Target className="w-9 h-9 mb-3 text-primary group-hover:scale-110 transition-transform" />
           <h3 className="text-lg font-bold text-text-primary">Job Match</h3>
           <p className="text-text-secondary text-sm mt-1">Compare resume vs job description</p>
         </Link>
@@ -118,7 +119,7 @@ function Dashboard() {
       <h2 className="text-xl font-bold text-text-primary mb-4">Recent Analyses</h2>
       {analyses.length === 0 ? (
         <div className="glass-card p-12 text-center">
-          <div className="text-5xl mb-4">📋</div>
+          <ClipboardList className="w-12 h-12 mb-4 text-text-secondary mx-auto" />
           <p className="text-text-secondary">No analyses yet. Upload a resume and run your first analysis!</p>
           <Link to="/upload" className="inline-block mt-4 px-6 py-2 bg-primary hover:bg-primary-hover text-white rounded-lg font-medium transition">
             Get Started
@@ -129,7 +130,7 @@ function Dashboard() {
           {analyses.slice(0, 10).map((analysis, idx) => (
             <div key={analysis._id} className="glass-card p-4 flex flex-col sm:flex-row sm:items-center justify-between gap-3 animate-slide-up" style={{ animationDelay: `${idx * 0.05}s` }}>
               <div className="flex items-center gap-3">
-                <div className="text-2xl">{analysis.type === "job-match" ? "🎯" : "🤖"}</div>
+                {analysis.type === "job-match" ? <Target className="w-6 h-6 text-primary" /> : <Sparkles className="w-6 h-6 text-secondary" />}
                 <div>
                   <p className="text-text-primary font-medium text-sm">
                     {analysis.resumeId?.originalName || "Resume"}

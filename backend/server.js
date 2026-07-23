@@ -11,6 +11,10 @@ const resumeRoutes = require("./routes/resumeRoutes");
 const aiRoutes = require("./routes/aiRoutes");
 const jobRoutes = require("./routes/jobRoutes");
 const analysisRoutes = require("./routes/analysisRoutes");
+const projectRoutes = require("./routes/projectRoutes");
+const resumeBuilderRoutes = require("./routes/resumeBuilderRoutes");
+const interviewRoutes = require("./routes/interviewRoutes");
+const readinessRoutes = require("./routes/readinessRoutes");
 
 // Load environment variables
 dotenv.config();
@@ -38,6 +42,10 @@ app.use("/api/resume", resumeRoutes);
 app.use("/api/ai", aiRoutes);
 app.use("/api/job", jobRoutes);
 app.use("/api/analysis", analysisRoutes);
+app.use("/api/projects", projectRoutes);
+app.use("/api/builder", resumeBuilderRoutes);
+app.use("/api/interview", interviewRoutes);
+app.use("/api/readiness", readinessRoutes);
 
 // Static files
 app.use("/uploads", express.static("uploads"));

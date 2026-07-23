@@ -10,6 +10,15 @@ export const matchJob = async (resumeId, jobDescription) => {
   return response.data;
 };
 
+export const extractJobDescription = async (file) => {
+  const formData = new FormData();
+  formData.append("jobDescriptionFile", file);
+  const response = await api.post("/job/extract", formData, {
+    headers: { "Content-Type": "multipart/form-data" },
+  });
+  return response.data;
+};
+
 export const getAnalysisHistory = async () => {
   const response = await api.get("/analysis/");
   return response.data;
