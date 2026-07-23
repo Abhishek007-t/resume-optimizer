@@ -12,6 +12,8 @@ Companion to `HLD.md`. This document covers database schemas, module boundaries,
 | `name` | String, required | |
 | `email` | String, required, unique, lowercase | Login identifier |
 | `password` | String, required, min 6 | bcrypt hash, never returned by any endpoint |
+| `resetPasswordToken` | String, `select: false` | SHA-256 hash of the raw reset token — the raw token is only ever emailed, never persisted |
+| `resetPasswordExpires` | Date, `select: false` | 1-hour TTL from issuance; `resetPassword` rejects if expired |
 | `timestamps` | — | `createdAt`/`updatedAt` |
 
 ### 1.2 `Resume`
@@ -38,13 +40,14 @@ Used for both **Resume Analysis** and **Job Match** results (`type` discriminate
 | `user`, `resumeId` | ObjectId refs, required | |
 | `type` | enum `[analysis, job-match]` | |
 | `atsScore` | Number, required | For `analysis`: sum of `scoreBreakdown` (computed server-side, not trusted to the LLM). For `job-match`: `matchPercentage`. |
-| `scoreBreakdown` | Object | `{ keywordRelevance, quantifiedImpact, formattingConsistency, sectionCompleteness, clarity }` — 0-20 each, `analysis` type only |
+| `scoreBreakdown` | Object | `{ keywordRelevance, quantifiedImpact, formattingConsistency, sectionCompleteness, clarity }` — 0-20 each, `analysis` type only. Four are LLM-judged; `sectionCompleteness` is computed deterministically (see §3.5) and merged in before saving. |
 | `parseability` | Object | `{ score, issues: [{ type, severity, message }] }` — deterministic, `analysis` type only |
 | `strengths`, `weaknesses`, `improvements` | Array | Shape varies by type (see API.md) |
 | `jobDescription` | String | `job-match` type only — this is what gets reused by Mock Interview's "JD carry-forward" |
 | `rawAnalysis` | Object, required | Full LLM response, superset of the above — frontend reads from here when a field isn't promoted to a top-level column |
+| `contentHash` | String | `analysis` type only. `sha256(extractedText + '|' + SCORING_VERSION)` — lets a re-analysis of unchanged text return the exact same cached document instead of a fresh (and potentially different) AI call. See §3.5. |
 
-Indexes: `{user, createdAt: -1}`, `{resumeId}`.
+Indexes: `{user, createdAt: -1}`, `{resumeId}`, `{resumeId, type, contentHash}` (cache lookup).
 
 ### 1.4 `ProjectInterrogation`
 | Field | Type | Notes |
@@ -87,11 +90,16 @@ backend/
     auth.js                  — JWT verification, attaches req.user
     upload.js                — multer config: resumes + JD PDFs (PDF-only, 5MB)
     uploadCertification.js   — multer config: certifications (PDF+image, 5MB)
+    sanitize.js               — strips `$`/`.`-keyed req.body fields (NoSQL injection guard, body-only — see §7 of HLD)
+    rateLimiter.js            — express-rate-limit tiers: authLimiter (10/15min), apiLimiter (300/15min)
+    validators.js              — express-validator chains: signup/login/forgotPassword/resetPassword
   models/                    — Mongoose schemas (see §1)
   services/
     geminiService.js         — single shared AI layer (see §4)
+    emailService.js          — Gmail SMTP via nodemailer; logs the reset link to console instead of
+                                failing when EMAIL_USER/EMAIL_APP_PASSWORD aren't configured (local dev)
   utils/
-    parseabilityChecker.js   — deterministic ATS-risk heuristic
+    parseabilityChecker.js   — deterministic ATS-risk heuristic + deterministic section-completeness score
     templateRecommender.js   — deterministic template-match heuristic
   controllers/                routes/
     authController.js          authRoutes.js
@@ -135,8 +143,16 @@ Same input class as §3.3, different question ("which template matches the origi
 2. >55 non-empty lines (dense/long resume) → recommend **ModernCV Classic** (tightest default spacing).
 3. Otherwise → recommend **Awesome-CV** (more visual identity, no structural risk signal present).
 
-### 3.5 ATS score computation (server-side arithmetic, not LLM math)
-`analyzeResume` in `geminiService.js` asks the LLM for five independent 0-20 sub-scores (`keywordRelevance`, `quantifiedImpact`, `formattingConsistency`, `sectionCompleteness`, `clarity`), each clamped to `[0,20]` in code, then **sums them in JavaScript** to produce `atsScore`. The model is never trusted to add its own sub-scores correctly — this removes one source of run-to-run score drift. Combined with `temperature: 0.1` (down from an initial `0.3`), this was the fix for an observed real bug: the same resume scoring 68/70/72 across repeated runs.
+### 3.5 ATS score computation: 4 AI-judged + 1 deterministic, plus content-hash caching
+`analyzeResume` in `geminiService.js` asks the LLM for **four** independent 0-20 sub-scores (`keywordRelevance`, `quantifiedImpact`, `formattingConsistency`, `clarity`), each clamped to `[0,20]` in code. The fifth, `sectionCompleteness`, is **not** asked of the LLM at all — "does this resume have an Experience/Education/Skills heading" requires zero semantic judgment, so `scoreSectionCompleteness()` in `parseabilityChecker.js` computes it with regex (core sections worth up to 6 points each, capped at 20, with bonus recognition for Summary/Objective and Projects sections) and it's merged into `scoreBreakdown` in code. `atsScore` is then **summed in JavaScript** across all five — the model is never trusted to add its own sub-scores, and one full dimension is removed from the LLM's judgment entirely, both narrowing the space for run-to-run drift.
+
+That narrowing wasn't sufficient on its own, though. A real bug was reported — the same resume scoring 58 then 63 on back-to-back analyses — and the root cause was more fundamental than prompt tuning could fix: **hosted LLM inference does not guarantee identical output for identical input even at `temperature: 0`** (floating-point non-associativity under batched/distributed inference, provider-side routing, etc.). The actual fix is `aiController.js`'s **content-hash cache**:
+```js
+const contentHash = crypto.createHash("sha256")
+  .update(`${resume.extractedText}|${SCORING_VERSION}`)
+  .digest("hex");
+```
+Before calling the AI, `analyzeResume` looks for an existing `Analysis` document with the same `{resumeId, type: "analysis", contentHash}`. If found (and the caller didn't pass `force: true`), that saved document is returned as-is — no AI call is made, so there is nothing left that *could* fluctuate. `SCORING_VERSION` (currently `"v2-deterministic-sections"`) is folded into the hash specifically so that a future change to the rubric or prompt invalidates old cached results instead of silently serving scores computed under outdated logic. Verified end-to-end against the real server: two identical `POST /api/ai/analyze` calls on the same resume text returned the same `Analysis._id` and `atsScore` both times, with the cached call completing roughly 5x faster.
 
 ### 3.6 Mock Interview weak-area targeting (`buildWeakAreasHint`)
 Before generating interview questions, `interviewController.js` gathers, in parallel:
@@ -183,19 +199,27 @@ Each pairs a `_SCHEMA` constant (Gemini `Type`-enum JSON schema) with a `build*P
 sequenceDiagram
     participant FE as React (AnalyzeResume.jsx)
     participant API as aiController.analyzeResume
+    participant DB as MongoDB
     participant PC as parseabilityChecker (deterministic)
     participant GS as geminiService.analyzeResume
-    participant DB as MongoDB
 
-    FE->>API: POST /api/ai/analyze {resumeId}
+    FE->>API: POST /api/ai/analyze {resumeId, force?}
     API->>DB: find Resume (ownership check)
-    API->>GS: analyzeResume(extractedText)
-    GS->>GS: Gemini call (5 sub-scores) -> fallback to Groq if needed
-    GS-->>API: {scoreBreakdown, atsScore (summed in code), weaknesses, ...}
-    API->>PC: checkParseability(extractedText)
-    PC-->>API: {score, issues} (no AI call)
-    API->>DB: Analysis.create({...})
-    API-->>FE: {analysis}
+    API->>API: contentHash = sha256(extractedText + SCORING_VERSION)
+    API->>DB: find cached Analysis {resumeId, type, contentHash}
+    alt cache hit and !force
+        DB-->>API: cached Analysis
+        API-->>FE: {analysis, cached: true}
+    else cache miss or force
+        API->>GS: analyzeResume(extractedText)
+        GS->>GS: Gemini call (4 sub-scores) -> fallback to Groq if needed
+        GS->>GS: merge deterministic sectionCompleteness, sum -> atsScore
+        GS-->>API: {scoreBreakdown, atsScore, weaknesses, ...}
+        API->>PC: checkParseability(extractedText)
+        PC-->>API: {score, issues} (no AI call)
+        API->>DB: Analysis.create({..., contentHash})
+        API-->>FE: {analysis, cached: false}
+    end
 ```
 
 ### 5.2 Resume Builder → Overleaf export
@@ -246,13 +270,15 @@ sequenceDiagram
 frontend/src/
   pages/            One component per route (Dashboard, UploadResume, AnalyzeResume,
                      JobMatch, ProjectInterrogator, ResumeBuilder, MockInterview,
-                     ReadinessDashboard, Login, Register, NotFound)
+                     ReadinessDashboard, Login, Register, ForgotPassword, ResetPassword,
+                     NotFound)
   components/        Navbar, ProtectedRoute, ScoreCircle, Sparkline, MicButton,
                      OpenInOverleafButton, Loading
   services/          One thin axios wrapper per backend resource (api.js holds the
                      shared instance + JWT auto-attach interceptor)
   utils/             latexResume.js (LaTeX generation), storage.js
-  hooks/             useSpeechToText.js (Web Speech API wrapper, Chromium-only,
-                     renders nothing on unsupported browsers)
+  hooks/             useSpeechToText.js (Web Speech API wrapper, Chromium-only;
+                     surfaces real browser error codes via an onError callback
+                     instead of failing silently — see CHANGELOG)
   constants/         colors.js (mirrors the CSS theme tokens for JS-side SVG coloring)
 ```

@@ -57,7 +57,7 @@ const matchJob = async (req, res) => {
     res.status(500).json({
       success: false,
       message: "Job Matching Failed",
-      error: error.message,
+      error: process.env.NODE_ENV === "production" ? undefined : error.message,
     });
   }
 };
@@ -95,7 +95,7 @@ const extractJobDescription = async (req, res) => {
     res.status(500).json({
       success: false,
       message: "Failed to read that job description file",
-      error: error.message,
+      error: process.env.NODE_ENV === "production" ? undefined : error.message,
     });
   }
 };

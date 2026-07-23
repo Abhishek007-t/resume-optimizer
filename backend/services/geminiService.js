@@ -2,6 +2,7 @@ const ai = require('../config/gemini');
 const { Type } = require('@google/genai');
 const axios = require('axios');
 const groqConfig = require('../config/groq');
+const { scoreSectionCompleteness } = require('../utils/parseabilityChecker');
 
 const MODEL = 'gemini-3.5-flash-lite';
 
@@ -152,23 +153,27 @@ const generateStructuredJSONFromParts = async ({ parts, systemInstruction, schem
 
 const ANALYSIS_SYSTEM_INSTRUCTION = `You are an expert technical recruiter and ATS specialist with 10+ years reviewing resumes for software engineering and IT roles. Give direct, specific, actionable feedback — never generic platitudes. Every claim must be grounded in the actual resume text provided; never invent details not present in it.`;
 
+// sectionCompleteness is deliberately NOT in here — "does this resume have
+// an Experience/Education/Skills heading" is a yes/no presence check with
+// zero semantic judgment involved, and letting the LLM score it was adding
+// pure sampling variance to a criterion that has one objectively correct
+// answer per resume. It's computed deterministically instead — see
+// scoreSectionCompleteness in utils/parseabilityChecker.js.
 const SCORE_BREAKDOWN_SCHEMA = {
     type: Type.OBJECT,
     properties: {
         keywordRelevance: { type: Type.INTEGER, description: 'Keyword relevance for the apparent target role, 0-20' },
         quantifiedImpact: { type: Type.INTEGER, description: 'Use of numbers/metrics in bullets, 0-20' },
         formattingConsistency: { type: Type.INTEGER, description: 'Formatting and structural consistency, 0-20' },
-        sectionCompleteness: { type: Type.INTEGER, description: 'Completeness of standard resume sections, 0-20' },
         clarity: { type: Type.INTEGER, description: 'Clarity and professionalism of language, 0-20' }
     },
-    required: ['keywordRelevance', 'quantifiedImpact', 'formattingConsistency', 'sectionCompleteness', 'clarity']
+    required: ['keywordRelevance', 'quantifiedImpact', 'formattingConsistency', 'clarity']
 };
 
 const ANALYSIS_SCHEMA = {
     type: Type.OBJECT,
     properties: {
         scoreBreakdown: SCORE_BREAKDOWN_SCHEMA,
-        atsScore: { type: Type.NUMBER, description: 'Overall ATS/quality score from 0 to 100 — must equal the sum of scoreBreakdown values' },
         atsReasoning: { type: Type.STRING },
         strengths: { type: Type.ARRAY, items: { type: Type.STRING } },
         weaknesses: {
@@ -206,19 +211,16 @@ const ANALYSIS_SCHEMA = {
         },
         overallFeedback: { type: Type.STRING }
     },
-    required: ['scoreBreakdown', 'atsScore', 'atsReasoning', 'strengths', 'weaknesses', 'missingKeywords', 'improvements', 'formatting', 'overallFeedback']
+    required: ['scoreBreakdown', 'atsReasoning', 'strengths', 'weaknesses', 'missingKeywords', 'improvements', 'formatting', 'overallFeedback']
 };
 
 const buildAnalysisPrompt = (extractedText) => `Evaluate this resume for ATS compatibility and overall quality.
 
-Score it on these 5 criteria independently, each 0-20, then set atsScore to their exact sum (0-100):
+Score it on these 4 criteria independently, each 0-20 — score each on its own merits, do not anchor it to what you expect a total to be (there is no total for you to compute; that's handled separately):
 - keywordRelevance: keyword relevance for its apparent target role
 - quantifiedImpact: use of numbers/metrics in bullets
 - formattingConsistency: formatting and structural consistency
-- sectionCompleteness: completeness of standard sections
 - clarity: clarity of language
-
-Score each criterion on its own merits — do not anchor it to what you expect the total to be.
 
 Identify concrete strengths, weaknesses with severity, missing keywords a recruiter would expect for this candidate's apparent field, and specific improvements — each with a rewritten example bullet.
 
@@ -232,18 +234,20 @@ const analyzeResume = async (extractedText) => {
         prompt: buildAnalysisPrompt(extractedText),
         systemInstruction: ANALYSIS_SYSTEM_INSTRUCTION,
         schema: ANALYSIS_SCHEMA,
-        temperature: 0.1
+        temperature: 0
     });
 
-    // Recompute atsScore server-side from the sub-scores rather than trusting
-    // the model's own addition — removes arithmetic slip as a source of the
-    // score drifting between otherwise-identical runs.
+    // atsScore is entirely server-computed: 4 LLM-judged sub-scores (clamped,
+    // never trusting the model's own arithmetic) plus one fully deterministic
+    // sub-score (sectionCompleteness — a presence check, not a judgment call,
+    // so it carries zero sampling variance). Splitting the rubric this way
+    // means only 80 of the 100 points can drift between runs at all, not 100.
     const breakdown = result.scoreBreakdown || {};
     const clamped = {
         keywordRelevance: clampScore(breakdown.keywordRelevance, 20),
         quantifiedImpact: clampScore(breakdown.quantifiedImpact, 20),
         formattingConsistency: clampScore(breakdown.formattingConsistency, 20),
-        sectionCompleteness: clampScore(breakdown.sectionCompleteness, 20),
+        sectionCompleteness: scoreSectionCompleteness(extractedText),
         clarity: clampScore(breakdown.clarity, 20)
     };
     result.scoreBreakdown = clamped;
@@ -574,7 +578,7 @@ const extractCertificationInfo = async (base64Data, mimeType) => {
 
 // ---- Mock Interview Simulator ----
 
-const QUESTION_GEN_SYSTEM_INSTRUCTION = `You are an experienced interviewer designing a mock interview round. Generate questions grounded in the candidate's actual resume and, if given, the specific job description — not generic questions any stranger's resume would also get. Vary difficulty and angle across the set.`;
+const QUESTION_GEN_SYSTEM_INSTRUCTION = `You are an experienced interviewer designing a mock interview round. Generate questions grounded in the candidate's actual resume and, if given, the specific job description — not generic questions any stranger's resume would also get. Vary difficulty and angle across the set. Phrase each question the way a real interviewer would actually ask it out loud in a conversation — natural and direct, not textbook-sounding. Vary sentence structure and opening phrasing across the set; do not start most questions with the same template (e.g. "Tell me about a time...") — that reads as a canned question bank, not a real interview.`;
 
 const ROUND_TYPE_GUIDANCE = {
     HR: 'Focus on motivation, culture fit, career goals, and general communication — not technical depth.',
@@ -611,7 +615,9 @@ const generateInterviewQuestions = async (resumeText, jobDescription, roundType,
     });
 };
 
-const ANSWER_SCORING_SYSTEM_INSTRUCTION = `You are an interview panelist scoring a candidate's written answer. Score honestly against a real hiring bar — do not inflate scores to be encouraging. Reward specificity, structure, and relevance; penalize vagueness and rambling.`;
+const ANSWER_SCORING_SYSTEM_INSTRUCTION = `You are an interview panelist scoring a candidate's written answer, in the middle of a live interview. Score honestly against a real hiring bar — do not inflate scores to be encouraging. Reward specificity, structure, and relevance; penalize vagueness and rambling.
+
+You also decide whether a real interviewer would follow up on this specific answer right now, rather than moving straight to the next scripted question — this is what makes an interview feel real instead of like a static quiz. Ask a follow-up when the answer was vague, left an obvious gap, or mentioned something specific worth digging into (a number, a decision, a tool, a tradeoff). Do not ask a follow-up when the answer was already clear and complete — real interviewers move on when they're satisfied, not after every answer. When you do ask one, it must reference the specific thing the candidate said, in one natural sentence, the way an interviewer would actually say it out loud (e.g. "You mentioned X — what made you choose that over Y?"), not a generic "can you elaborate?".`;
 
 const ANSWER_SCORE_SCHEMA = {
     type: Type.OBJECT,
@@ -619,12 +625,13 @@ const ANSWER_SCORE_SCHEMA = {
         score: { type: Type.NUMBER, description: '0-100' },
         strengths: { type: Type.ARRAY, items: { type: Type.STRING } },
         gaps: { type: Type.ARRAY, items: { type: Type.STRING } },
-        idealAnswerHint: { type: Type.STRING, description: 'One sentence on what a strong answer would have included' }
+        idealAnswerHint: { type: Type.STRING, description: 'One sentence on what a strong answer would have included' },
+        followUpQuestion: { type: Type.STRING, description: 'A natural follow-up question referencing what the candidate specifically said, if one is warranted — empty string if the answer was already complete and no follow-up is needed' }
     },
-    required: ['score', 'strengths', 'gaps', 'idealAnswerHint']
+    required: ['score', 'strengths', 'gaps', 'idealAnswerHint', 'followUpQuestion']
 };
 
-const buildAnswerScoringPrompt = (question, answer, resumeText) => `Score this interview answer.
+const buildAnswerScoringPrompt = (question, answer, resumeText) => `Score this interview answer, and decide whether it deserves a live follow-up question.
 
 Question: ${question}
 

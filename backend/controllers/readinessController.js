@@ -107,7 +107,7 @@ const getReadiness = async (req, res) => {
     res.status(500).json({
       success: false,
       message: "Failed to compute readiness score",
-      error: error.message,
+      error: process.env.NODE_ENV === "production" ? undefined : error.message,
     });
   }
 };

@@ -1,11 +1,18 @@
+const crypto = require("crypto");
 const Resume = require("../models/Resume");
 const Analysis = require("../models/Analysis");
 const geminiService = require("../services/geminiService");
 const { checkParseability } = require("../utils/parseabilityChecker");
 
+// Bump this whenever the scoring rubric/prompt changes meaningfully — it's
+// baked into contentHash, so a resume analyzed under an older version of
+// the logic is correctly treated as stale and re-scored, rather than the
+// cache serving a result computed under outdated criteria.
+const SCORING_VERSION = "v2-deterministic-sections";
+
 const analyzeResume = async (req, res) => {
   try {
-    const { resumeId } = req.body;
+    const { resumeId, force } = req.body;
 
     if (!resumeId) {
       return res.status(400).json({
@@ -25,6 +32,34 @@ const analyzeResume = async (req, res) => {
         success: false,
         message: "Resume not found",
       });
+    }
+
+    const contentHash = crypto
+      .createHash("sha256")
+      .update(`${resume.extractedText}|${SCORING_VERSION}`)
+      .digest("hex");
+
+    // The whole point: an LLM API is not guaranteed to return the same
+    // score for the same input twice, even at temperature 0 — that's an
+    // inherent property of hosted inference, not a prompt bug. So instead
+    // of re-asking (and getting a different answer), unchanged text just
+    // returns what was already computed for it. Only a real edit to the
+    // resume, or an explicit `force`, triggers a fresh AI call.
+    if (!force) {
+      const cached = await Analysis.findOne({
+        user: req.user.id,
+        resumeId: resume._id,
+        type: "analysis",
+        contentHash,
+      }).sort({ createdAt: -1 });
+
+      if (cached) {
+        return res.status(200).json({
+          success: true,
+          analysis: cached,
+          cached: true,
+        });
+      }
     }
 
     // Call Gemini AI via service
@@ -47,11 +82,13 @@ const analyzeResume = async (req, res) => {
       weaknesses: result.weaknesses || [],
       improvements: result.improvements || [],
       rawAnalysis: result,
+      contentHash,
     });
 
     res.status(200).json({
       success: true,
       analysis: savedAnalysis,
+      cached: false,
     });
   } catch (error) {
     console.error("AI Analysis Error:", error);
@@ -59,7 +96,7 @@ const analyzeResume = async (req, res) => {
     res.status(500).json({
       success: false,
       message: "AI Analysis Failed",
-      error: error.message,
+      error: process.env.NODE_ENV === "production" ? undefined : error.message,
     });
   }
 };

@@ -56,6 +56,17 @@ const analysisSchema = new mongoose.Schema(
       type: Object,
       required: true,
     },
+
+    // sha256(extractedText + scoring algorithm version). Lets a re-analysis
+    // of literally unchanged text return the exact same result instead of
+    // re-rolling a probabilistic call — LLM APIs don't guarantee identical
+    // output for identical input even at temperature 0, so re-asking is
+    // exactly why the score fluctuates. Includes the algorithm version so
+    // a future rubric/prompt change correctly invalidates old cached scores
+    // instead of serving a result computed under outdated logic.
+    contentHash: {
+      type: String,
+    },
   },
   {
     timestamps: true,
@@ -64,5 +75,6 @@ const analysisSchema = new mongoose.Schema(
 
 analysisSchema.index({ user: 1, createdAt: -1 });
 analysisSchema.index({ resumeId: 1 });
+analysisSchema.index({ resumeId: 1, type: 1, contentHash: 1 });
 
 module.exports = mongoose.model("Analysis", analysisSchema);

@@ -21,6 +21,14 @@ export const AuthProvider = ({ children }) => {
     const validateToken = async () => {
       const token = getToken();
       if (!token) {
+        // `user` state was seeded from localStorage above for optimistic
+        // UI — if there's no token to back it up (stale/cleared/tampered
+        // localStorage), that seed must not be trusted. Without this,
+        // isAuthenticated stays true on a leftover `user` blob alone and
+        // ProtectedRoute lets the page shell render before any API call
+        // gets the chance to 401 it back out.
+        clearAuth();
+        setUser(null);
         setLoading(false);
         return;
       }
@@ -63,7 +71,9 @@ export const AuthProvider = ({ children }) => {
     login,
     register,
     logout,
-    isAuthenticated: !!user,
+    // Requires both, not just `user` truthiness — a leftover user blob in
+    // localStorage with no backing token must never count as authenticated.
+    isAuthenticated: !!user && !!getToken(),
   };
 
   return (

@@ -800,6 +800,7 @@ function SkillsCard({ groups, setResume }) {
 
 function TagListCard({ title, items, onChange, placeholder, onFileUpload, uploading }) {
   const [draft, setDraft] = useState("");
+  const [dragOver, setDragOver] = useState(false);
   const fileInputRef = useRef(null);
 
   const addTag = () => {
@@ -816,6 +817,16 @@ function TagListCard({ title, items, onChange, placeholder, onFileUpload, upload
     e.target.value = "";
   };
 
+  const handleDragOver = (e) => { if (onFileUpload) { e.preventDefault(); setDragOver(true); } };
+  const handleDragLeave = () => setDragOver(false);
+  const handleDrop = (e) => {
+    if (!onFileUpload) return;
+    e.preventDefault();
+    setDragOver(false);
+    const file = e.dataTransfer.files?.[0];
+    if (file) onFileUpload(file);
+  };
+
   return (
     <FieldCard
       title={title}
@@ -830,21 +841,31 @@ function TagListCard({ title, items, onChange, placeholder, onFileUpload, upload
         </button>
       )}
     >
-      <div className="flex flex-wrap gap-2 mb-3">
-        {items.map((t, i) => (
-          <span key={i} className="tag-found flex items-center gap-1.5">
-            {t}
-            <button onClick={() => removeTag(i)} className="text-[10px] opacity-70 hover:opacity-100"><X className="w-2.5 h-2.5" /></button>
-          </span>
-        ))}
+      <div
+        onDragOver={handleDragOver}
+        onDragLeave={handleDragLeave}
+        onDrop={handleDrop}
+        className={`rounded-lg transition ${dragOver ? "ring-2 ring-primary bg-primary/5" : ""}`}
+      >
+        {onFileUpload && (
+          <p className="text-[11px] text-text-secondary mb-2">Drop a certificate image/PDF here, or use the button above.</p>
+        )}
+        <div className="flex flex-wrap gap-2 mb-3">
+          {items.map((t, i) => (
+            <span key={i} className="tag-found flex items-center gap-1.5">
+              {t}
+              <button onClick={() => removeTag(i)} className="text-[10px] opacity-70 hover:opacity-100"><X className="w-2.5 h-2.5" /></button>
+            </span>
+          ))}
+        </div>
+        <input
+          value={draft}
+          onChange={(e) => setDraft(e.target.value)}
+          onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); addTag(); } }}
+          placeholder={placeholder}
+          className="w-full rounded-lg bg-bg-card border border-border px-3 py-2 text-sm text-text-primary focus:border-primary focus:ring-2 focus:ring-primary/20"
+        />
       </div>
-      <input
-        value={draft}
-        onChange={(e) => setDraft(e.target.value)}
-        onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); addTag(); } }}
-        placeholder={placeholder}
-        className="w-full rounded-lg bg-bg-card border border-border px-3 py-2 text-sm text-text-primary focus:border-primary focus:ring-2 focus:ring-primary/20"
-      />
       {onFileUpload && (
         <input
           ref={fileInputRef}

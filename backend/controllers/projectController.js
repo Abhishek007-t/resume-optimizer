@@ -44,7 +44,7 @@ const extractProjects = async (req, res) => {
     res.status(500).json({
       success: false,
       message: "Project extraction failed",
-      error: error.message,
+      error: process.env.NODE_ENV === "production" ? undefined : error.message,
     });
   }
 };
@@ -103,7 +103,7 @@ const startInterrogation = async (req, res) => {
     res.status(500).json({
       success: false,
       message: "Failed to start interrogation",
-      error: error.message,
+      error: process.env.NODE_ENV === "production" ? undefined : error.message,
     });
   }
 };
@@ -154,7 +154,7 @@ const reply = async (req, res) => {
     res.status(500).json({
       success: false,
       message: "Failed to continue interrogation",
-      error: error.message,
+      error: process.env.NODE_ENV === "production" ? undefined : error.message,
     });
   }
 };
@@ -198,7 +198,7 @@ const finish = async (req, res) => {
     res.status(500).json({
       success: false,
       message: "Failed to summarize interrogation",
-      error: error.message,
+      error: process.env.NODE_ENV === "production" ? undefined : error.message,
     });
   }
 };
@@ -225,7 +225,7 @@ const getInterrogation = async (req, res) => {
     res.status(500).json({
       success: false,
       message: "Failed to fetch interrogation",
-      error: error.message,
+      error: process.env.NODE_ENV === "production" ? undefined : error.message,
     });
   }
 };
@@ -244,7 +244,7 @@ const listInterrogations = async (req, res) => {
     res.status(500).json({
       success: false,
       message: "Failed to fetch interrogation history",
-      error: error.message,
+      error: process.env.NODE_ENV === "production" ? undefined : error.message,
     });
   }
 };

@@ -55,6 +55,7 @@ function JobMatch() {
   const [loading, setLoading] = useState(false);
   const [resumesLoading, setResumesLoading] = useState(true);
   const [extractingJd, setExtractingJd] = useState(false);
+  const [jdDragOver, setJdDragOver] = useState(false);
   const jdFileInputRef = useRef(null);
 
   useEffect(() => {
@@ -75,10 +76,9 @@ function JobMatch() {
     fetchResumes();
   }, []);
 
-  const handleJdFileChange = async (e) => {
-    const file = e.target.files?.[0];
-    e.target.value = "";
+  const handleJdFile = async (file) => {
     if (!file) return;
+    if (file.type !== "application/pdf") { toast.warning("Please drop a PDF file"); return; }
 
     try {
       setExtractingJd(true);
@@ -90,6 +90,20 @@ function JobMatch() {
     } finally {
       setExtractingJd(false);
     }
+  };
+
+  const handleJdFileChange = (e) => {
+    const file = e.target.files?.[0];
+    e.target.value = "";
+    handleJdFile(file);
+  };
+
+  const handleJdDragOver = (e) => { e.preventDefault(); setJdDragOver(true); };
+  const handleJdDragLeave = () => setJdDragOver(false);
+  const handleJdDrop = (e) => {
+    e.preventDefault();
+    setJdDragOver(false);
+    handleJdFile(e.dataTransfer.files?.[0]);
   };
 
   const handleMatch = async () => {
@@ -163,13 +177,20 @@ function JobMatch() {
                 className="hidden"
               />
             </div>
-            <textarea
-              rows="8"
-              placeholder="Paste the complete job description here, or upload a PDF..."
-              value={jobDescription}
-              onChange={(e) => setJobDescription(e.target.value)}
-              className="w-full rounded-xl bg-bg-card border border-border p-4 text-text-primary placeholder-text-secondary/50 resize-none focus:border-primary focus:ring-2 focus:ring-primary/20"
-            />
+            <div
+              onDragOver={handleJdDragOver}
+              onDragLeave={handleJdDragLeave}
+              onDrop={handleJdDrop}
+              className={`rounded-xl transition ${jdDragOver ? "ring-2 ring-primary bg-primary/5" : ""}`}
+            >
+              <textarea
+                rows="8"
+                placeholder="Paste the complete job description here, drop a PDF, or upload one..."
+                value={jobDescription}
+                onChange={(e) => setJobDescription(e.target.value)}
+                className="w-full rounded-xl bg-bg-card border border-border p-4 text-text-primary placeholder-text-secondary/50 resize-none focus:border-primary focus:ring-2 focus:ring-primary/20"
+              />
+            </div>
           </div>
 
           <button

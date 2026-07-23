@@ -6,6 +6,8 @@ const morgan = require("morgan");
 const cookieParser = require("cookie-parser");
 const fs = require("fs");
 const connectDB = require("./config/db");
+const sanitizeBody = require("./middleware/sanitize");
+const { apiLimiter, authLimiter } = require("./middleware/rateLimiter");
 const authRoutes = require("./routes/authRoutes");
 const resumeRoutes = require("./routes/resumeRoutes");
 const aiRoutes = require("./routes/aiRoutes");
@@ -29,15 +31,23 @@ if (!fs.existsSync("uploads")) {
 
 const app = express();
 
+// In production, only the configured frontend origin may call this API —
+// wide-open cors() is fine for local dev but not for a deployed backend.
+const corsOptions = process.env.NODE_ENV === "production"
+  ? { origin: process.env.FRONTEND_URL, credentials: true }
+  : { origin: true, credentials: true };
+
 // Middleware
 app.use(express.json());
-app.use(cors());
+app.use(cors(corsOptions));
 app.use(helmet());
-app.use(morgan("dev"));
+app.use(morgan(process.env.NODE_ENV === "production" ? "combined" : "dev"));
 app.use(cookieParser());
+app.use(sanitizeBody);
+app.use("/api", apiLimiter);
 
 // Routes
-app.use("/api/auth", authRoutes);
+app.use("/api/auth", authLimiter, authRoutes);
 app.use("/api/resume", resumeRoutes);
 app.use("/api/ai", aiRoutes);
 app.use("/api/job", jobRoutes);

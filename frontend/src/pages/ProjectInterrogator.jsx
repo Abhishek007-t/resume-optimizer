@@ -30,6 +30,7 @@ function ProjectInterrogator() {
   const baseMessageRef = useRef("");
   const { isSupported: micSupported, isListening, start: startMic, stop: stopMic } = useSpeechToText({
     onTranscriptChange: (sessionText) => setMessage((baseMessageRef.current ? baseMessageRef.current + " " : "") + sessionText),
+    onError: (message) => toast.error(message),
   });
 
   const handleMicToggle = () => {

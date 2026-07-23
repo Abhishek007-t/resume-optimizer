@@ -77,7 +77,7 @@ const parseResume = async (req, res) => {
     res.status(500).json({
       success: false,
       message: "Failed to parse resume into structured fields",
-      error: error.message,
+      error: process.env.NODE_ENV === "production" ? undefined : error.message,
     });
   }
 };
@@ -121,7 +121,7 @@ const saveResume = async (req, res) => {
     res.status(500).json({
       success: false,
       message: "Failed to save resume",
-      error: error.message,
+      error: process.env.NODE_ENV === "production" ? undefined : error.message,
     });
   }
 };
@@ -159,7 +159,7 @@ const improveField = async (req, res) => {
     res.status(500).json({
       success: false,
       message: "Failed to generate an improved version",
-      error: error.message,
+      error: process.env.NODE_ENV === "production" ? undefined : error.message,
     });
   }
 };
@@ -200,7 +200,7 @@ const uploadCertification = async (req, res) => {
     res.status(500).json({
       success: false,
       message: "Failed to read that certificate",
-      error: error.message,
+      error: process.env.NODE_ENV === "production" ? undefined : error.message,
     });
   }
 };

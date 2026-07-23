@@ -105,4 +105,23 @@ const checkParseability = (extractedText) => {
   };
 };
 
-module.exports = { checkParseability };
+// "Does this resume have an Experience/Education/Skills heading" needs zero
+// semantic judgment — it's a yes/no presence check. Scoring it with an LLM
+// (as analyzeResume's rubric originally did) adds pure sampling variance to
+// a criterion that has one objectively correct answer per resume. Computing
+// it here removes an entire dimension of run-to-run score drift; reuses the
+// same section patterns checkParseability already validates elsewhere.
+const BONUS_SECTIONS = [
+  { pattern: /\b(summary|objective)\b/i, points: 1 },
+  { pattern: /\bprojects\b/i, points: 1 },
+];
+const CORE_SECTION_POINTS = 6; // 3 core sections x 6 = 18, + up to 2 bonus = 20 max
+
+const scoreSectionCompleteness = (extractedText) => {
+  const text = extractedText || "";
+  const coreScore = REQUIRED_SECTIONS.reduce((sum, s) => sum + (s.pattern.test(text) ? CORE_SECTION_POINTS : 0), 0);
+  const bonusScore = BONUS_SECTIONS.reduce((sum, s) => sum + (s.pattern.test(text) ? s.points : 0), 0);
+  return Math.min(20, coreScore + bonusScore);
+};
+
+module.exports = { checkParseability, scoreSectionCompleteness };

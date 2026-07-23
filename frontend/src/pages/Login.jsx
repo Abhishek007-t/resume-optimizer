@@ -34,7 +34,7 @@ function Login() {
   return (
     <div className="min-h-screen bg-bg-dark flex items-center justify-center px-4">
       {/* Background gradient */}
-      <div className="fixed inset-0 bg-gradient-to-br from-bg-dark via-slate-900 to-purple-950/30 pointer-events-none"></div>
+      <div className="fixed inset-0 bg-gradient-to-br from-bg-dark via-bg-card to-bg-dark pointer-events-none"></div>
       <div className="fixed top-1/4 left-1/4 w-96 h-96 bg-primary/5 rounded-full blur-3xl pointer-events-none"></div>
       <div className="fixed bottom-1/4 right-1/4 w-96 h-96 bg-secondary/5 rounded-full blur-3xl pointer-events-none"></div>
 
@@ -59,7 +59,12 @@ function Login() {
           </div>
 
           <div>
-            <label className="block mb-2 text-sm font-medium text-text-secondary">Password</label>
+            <div className="flex items-center justify-between mb-2">
+              <label className="text-sm font-medium text-text-secondary">Password</label>
+              <Link to="/forgot-password" className="text-xs font-medium text-primary hover:text-primary-hover">
+                Forgot Password?
+              </Link>
+            </div>
             <input
               type="password"
               name="password"

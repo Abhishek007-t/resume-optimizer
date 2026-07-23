@@ -99,7 +99,7 @@ const startInterview = async (req, res) => {
     res.status(500).json({
       success: false,
       message: "Failed to start the interview",
-      error: error.message,
+      error: process.env.NODE_ENV === "production" ? undefined : error.message,
     });
   }
 };
@@ -149,6 +149,21 @@ const submitAnswer = async (req, res) => {
     question.gaps = result.gaps;
     question.idealAnswerHint = result.idealAnswerHint;
 
+    // Real interviewers don't just march through a fixed script — they
+    // follow up on what you just said. The scoring call itself decides
+    // whether this specific answer warrants one (folded into the same
+    // request, not a second AI call), and if so it's inserted as the next
+    // question. Capped so a run of consecutive "worth probing" answers
+    // can't turn a 6-question round into an unbounded one.
+    const MAX_QUESTIONS = 10;
+    if (result.followUpQuestion && result.followUpQuestion.trim() && session.questions.length < MAX_QUESTIONS) {
+      session.questions.splice(Number(questionIndex) + 1, 0, {
+        question: result.followUpQuestion.trim(),
+        category: "Follow-up",
+        targetSkill: question.targetSkill,
+      });
+    }
+
     await session.save();
 
     res.status(200).json({
@@ -161,7 +176,7 @@ const submitAnswer = async (req, res) => {
     res.status(500).json({
       success: false,
       message: "Failed to score the answer",
-      error: error.message,
+      error: process.env.NODE_ENV === "production" ? undefined : error.message,
     });
   }
 };
@@ -203,7 +218,7 @@ const finishInterview = async (req, res) => {
     res.status(500).json({
       success: false,
       message: "Failed to summarize the interview",
-      error: error.message,
+      error: process.env.NODE_ENV === "production" ? undefined : error.message,
     });
   }
 };
@@ -227,7 +242,7 @@ const getSession = async (req, res) => {
     res.status(500).json({
       success: false,
       message: "Failed to fetch session",
-      error: error.message,
+      error: process.env.NODE_ENV === "production" ? undefined : error.message,
     });
   }
 };
@@ -246,7 +261,7 @@ const listSessions = async (req, res) => {
     res.status(500).json({
       success: false,
       message: "Failed to fetch interview history",
-      error: error.message,
+      error: process.env.NODE_ENV === "production" ? undefined : error.message,
     });
   }
 };

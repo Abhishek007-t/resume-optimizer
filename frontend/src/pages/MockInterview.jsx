@@ -24,6 +24,7 @@ function MockInterview() {
   const [weakProjects, setWeakProjects] = useState([]);
   const [focusProjectTitle, setFocusProjectTitle] = useState("");
   const [extractingJd, setExtractingJd] = useState(false);
+  const [jdDragOver, setJdDragOver] = useState(false);
   const jdFileInputRef = useRef(null);
 
   const [session, setSession] = useState(null);
@@ -35,6 +36,7 @@ function MockInterview() {
   const baseAnswerRef = useRef("");
   const { isSupported: micSupported, isListening, start: startMic, stop: stopMic } = useSpeechToText({
     onTranscriptChange: (sessionText) => setAnswerDraft((baseAnswerRef.current ? baseAnswerRef.current + " " : "") + sessionText),
+    onError: (message) => toast.error(message),
   });
 
   const handleMicToggle = () => {
@@ -90,10 +92,9 @@ function MockInterview() {
     })();
   }, [selectedResume]);
 
-  const handleJdFileChange = async (e) => {
-    const file = e.target.files?.[0];
-    e.target.value = "";
+  const handleJdFile = async (file) => {
     if (!file) return;
+    if (file.type !== "application/pdf") { toast.warning("Please drop a PDF file"); return; }
 
     try {
       setExtractingJd(true);
@@ -106,6 +107,20 @@ function MockInterview() {
     } finally {
       setExtractingJd(false);
     }
+  };
+
+  const handleJdFileChange = (e) => {
+    const file = e.target.files?.[0];
+    e.target.value = "";
+    handleJdFile(file);
+  };
+
+  const handleJdDragOver = (e) => { e.preventDefault(); setJdDragOver(true); };
+  const handleJdDragLeave = () => setJdDragOver(false);
+  const handleJdDrop = (e) => {
+    e.preventDefault();
+    setJdDragOver(false);
+    handleJdFile(e.dataTransfer.files?.[0]);
   };
 
   const handleStart = async () => {
@@ -227,13 +242,20 @@ function MockInterview() {
             {jdReused && (
               <p className="text-xs text-primary mb-2 flex items-center gap-1.5"><RotateCcw className="w-3 h-3 shrink-0" /> Reused from your last Job Match run on this resume — edit or clear it if that's stale.</p>
             )}
-            <textarea
-              value={jobDescription}
-              onChange={(e) => { setJobDescription(e.target.value); setJdReused(false); }}
-              rows={4}
-              placeholder="Paste a job description to get questions tailored to that specific role..."
-              className="w-full rounded-xl bg-bg-card border border-border px-4 py-3 text-text-primary text-sm focus:border-primary focus:ring-2 focus:ring-primary/20 resize-none"
-            />
+            <div
+              onDragOver={handleJdDragOver}
+              onDragLeave={handleJdDragLeave}
+              onDrop={handleJdDrop}
+              className={`rounded-xl transition ${jdDragOver ? "ring-2 ring-primary bg-primary/5" : ""}`}
+            >
+              <textarea
+                value={jobDescription}
+                onChange={(e) => { setJobDescription(e.target.value); setJdReused(false); }}
+                rows={4}
+                placeholder="Paste a job description, drop a PDF, or upload one..."
+                className="w-full rounded-xl bg-bg-card border border-border px-4 py-3 text-text-primary text-sm focus:border-primary focus:ring-2 focus:ring-primary/20 resize-none"
+              />
+            </div>
           </div>
 
           {weakProjects.length > 0 && (

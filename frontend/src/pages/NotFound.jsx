@@ -3,7 +3,7 @@ import { Link } from "react-router-dom";
 function NotFound() {
   return (
     <div className="min-h-screen bg-bg-dark flex items-center justify-center px-4">
-      <div className="fixed inset-0 bg-gradient-to-br from-bg-dark via-slate-900 to-purple-950/30 pointer-events-none"></div>
+      <div className="fixed inset-0 bg-gradient-to-br from-bg-dark via-bg-card to-bg-dark pointer-events-none"></div>
 
       <div className="relative text-center animate-slide-up">
         <h1 className="text-8xl sm:text-9xl font-bold gradient-text mb-4">404</h1>
