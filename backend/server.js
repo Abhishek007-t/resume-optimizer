@@ -31,6 +31,11 @@ if (!fs.existsSync("uploads")) {
 
 const app = express();
 
+// Render proxies all traffic through its load balancer — without trusting the
+// proxy's X-Forwarded-For header, every user shares one IP and the rate
+// limiter locks everyone out together. 1 hop = Render only.
+app.set("trust proxy", 1);
+
 // In production, only the configured frontend origin may call this API —
 // wide-open cors() is fine for local dev but not for a deployed backend.
 const corsOptions = process.env.NODE_ENV === "production"
