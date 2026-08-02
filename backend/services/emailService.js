@@ -1,4 +1,11 @@
 const nodemailer = require("nodemailer");
+const dns = require("dns");
+
+// smtp.gmail.com resolves to both an A and AAAA record. Render's network has
+// no IPv6 egress route, but Node's default DNS ordering can still hand back
+// the AAAA address first, so the connection dies instantly with ENETUNREACH.
+// Forcing IPv4 first avoids that regardless of what the host's routing supports.
+dns.setDefaultResultOrder("ipv4first");
 
 // Gmail SMTP via an "app password" (requires 2FA enabled on the sending
 // Gmail account) — free, no third-party signup. If not configured, password
@@ -14,6 +21,7 @@ const getTransporter = () => nodemailer.createTransport({
     user: process.env.EMAIL_USER,
     pass: process.env.EMAIL_APP_PASSWORD,
   },
+  family: 4,
   connectionTimeout: 10000,
   greetingTimeout: 10000,
   socketTimeout: 10000,
