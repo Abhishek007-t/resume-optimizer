@@ -32,41 +32,22 @@ const getTransporter = () => nodemailer.createTransport({
   socketTimeout: 10000,
 });
 
-// TEMP DEBUG: tracks the outcome of the most recent send attempt so it can
-// be inspected via a debug route when the host's own logs aren't reachable.
-// Remove alongside the /debug/last-email route once diagnosed.
-let lastAttempt = null;
-const getLastEmailAttempt = () => lastAttempt;
-
 const sendPasswordResetEmail = async (toEmail, resetUrl) => {
   if (!isConfigured()) {
     console.warn(`EMAIL_USER/EMAIL_APP_PASSWORD not set — password reset link for ${toEmail}: ${resetUrl}`);
-    lastAttempt = { at: new Date().toISOString(), configured: false };
     return;
   }
 
-  try {
-    await getTransporter().sendMail({
-      from: `"Resume Optimizer" <${process.env.EMAIL_USER}>`,
-      to: toEmail,
-      subject: "Reset your Resume Optimizer password",
-      html: `
-        <p>You (or someone else) requested a password reset for your Resume Optimizer account.</p>
-        <p><a href="${resetUrl}">Click here to reset your password</a></p>
-        <p>This link expires in 1 hour. If you didn't request this, you can safely ignore this email — your password won't change.</p>
-      `,
-    });
-    lastAttempt = { at: new Date().toISOString(), success: true, to: toEmail };
-  } catch (error) {
-    lastAttempt = {
-      at: new Date().toISOString(),
-      success: false,
-      to: toEmail,
-      code: error.code,
-      message: error.message,
-    };
-    throw error;
-  }
+  await getTransporter().sendMail({
+    from: `"Resume Optimizer" <${process.env.EMAIL_USER}>`,
+    to: toEmail,
+    subject: "Reset your Resume Optimizer password",
+    html: `
+      <p>You (or someone else) requested a password reset for your Resume Optimizer account.</p>
+      <p><a href="${resetUrl}">Click here to reset your password</a></p>
+      <p>This link expires in 1 hour. If you didn't request this, you can safely ignore this email — your password won't change.</p>
+    `,
+  });
 };
 
-module.exports = { sendPasswordResetEmail, isConfigured, getLastEmailAttempt };
+module.exports = { sendPasswordResetEmail, isConfigured };

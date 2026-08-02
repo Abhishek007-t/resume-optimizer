@@ -17,7 +17,6 @@ const {
   forgotPassword,
   resetPassword,
 } = require("../controllers/authController");
-const { getLastEmailAttempt } = require("../services/emailService");
 
 router.post("/signup", signupValidation, signup);
 
@@ -28,9 +27,5 @@ router.get("/profile", auth, getProfile);
 router.post("/forgot-password", forgotPasswordValidation, forgotPassword);
 
 router.post("/reset-password", resetPasswordValidation, resetPassword);
-
-// TEMP DEBUG: remove alongside emailService.js's lastAttempt tracking once
-// the production email-delivery issue is diagnosed.
-router.get("/debug/last-email", (req, res) => res.json(getLastEmailAttempt() || { message: "no attempts yet" }));
 
 module.exports = router;
