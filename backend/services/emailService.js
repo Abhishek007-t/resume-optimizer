@@ -15,8 +15,13 @@ const isConfigured = () => Boolean(process.env.EMAIL_USER && process.env.EMAIL_A
 // Gmail's SMTP silently stalls instead of erroring when it throttles an app
 // password (e.g. sends from multiple source IPs in a short window) — without
 // these, a stalled connection hangs the caller indefinitely.
+// Port 465 (implicit TLS, what `service: "gmail"` defaults to) times out on
+// Render — likely blocked outbound. Trying 587 (STARTTLS) instead, since
+// hosts that filter SMTP often only block one of the two.
 const getTransporter = () => nodemailer.createTransport({
-  service: "gmail",
+  host: "smtp.gmail.com",
+  port: 587,
+  secure: false,
   auth: {
     user: process.env.EMAIL_USER,
     pass: process.env.EMAIL_APP_PASSWORD,
