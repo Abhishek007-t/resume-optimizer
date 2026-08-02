@@ -5,12 +5,18 @@ const nodemailer = require("nodemailer");
 // reset requests are logged instead of emailed so local dev doesn't hard-fail.
 const isConfigured = () => Boolean(process.env.EMAIL_USER && process.env.EMAIL_APP_PASSWORD);
 
+// Gmail's SMTP silently stalls instead of erroring when it throttles an app
+// password (e.g. sends from multiple source IPs in a short window) — without
+// these, a stalled connection hangs the caller indefinitely.
 const getTransporter = () => nodemailer.createTransport({
   service: "gmail",
   auth: {
     user: process.env.EMAIL_USER,
     pass: process.env.EMAIL_APP_PASSWORD,
   },
+  connectionTimeout: 10000,
+  greetingTimeout: 10000,
+  socketTimeout: 10000,
 });
 
 const sendPasswordResetEmail = async (toEmail, resetUrl) => {
