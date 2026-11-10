@@ -276,7 +276,7 @@ AI rewrite suggestion for a single field (summary, a bullet, a project descripti
 // 201 Response
 { "success": true, "session": { /* InterviewSession, 6 questions, none answered yet */ } }
 ```
-Questions are generated with a server-computed hint biasing toward the candidate's known weak areas (latest Analyze weaknesses, latest Job Match missing skills, Project Interrogator weak claims — optionally scoped to `focusProjectTitle`). See LLD.md §3.6.
+For a Technical round, up to 2 of the 6 questions are steered by a server-computed hint of the candidate's known weak areas (latest Analyze weaknesses, latest Job Match missing skills, Project Interrogator weak claims — optionally scoped to `focusProjectTitle`). HR and Behavioral rounds don't use the hint. After each answer, at most one follow-up question may be inserted per main question. See LLD.md §3.6.
 
 ### `GET /:id`
 ```json

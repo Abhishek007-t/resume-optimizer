@@ -3,6 +3,7 @@ const InterviewSession = require("../models/InterviewSession");
 const Analysis = require("../models/Analysis");
 const ProjectInterrogation = require("../models/ProjectInterrogation");
 const geminiService = require("../services/geminiService");
+const { FOLLOW_UP_CATEGORY, shouldAddFollowUp } = require("../services/interviewRules");
 
 const ROUND_TYPES = ["HR", "Technical", "Behavioral"];
 
@@ -35,7 +36,7 @@ const buildWeakAreasHint = async (userId, resumeId, focusProjectTitle) => {
 
   relevantInterrogations.forEach((i) => {
     if (i.weakClaims?.length) {
-      lines.push(`Unverified/vague claims on project "${i.projectTitle}" (dig into these specifically): ${i.weakClaims.join("; ")}`);
+      lines.push(`Vague claims on project "${i.projectTitle}": ${i.weakClaims.join("; ")}`);
     }
   });
 
@@ -153,13 +154,18 @@ const submitAnswer = async (req, res) => {
     // follow up on what you just said. The scoring call itself decides
     // whether this specific answer warrants one (folded into the same
     // request, not a second AI call), and if so it's inserted as the next
-    // question. Capped so a run of consecutive "worth probing" answers
-    // can't turn a 6-question round into an unbounded one.
-    const MAX_QUESTIONS = 10;
-    if (result.followUpQuestion && result.followUpQuestion.trim() && session.questions.length < MAX_QUESTIONS) {
+    // question. shouldAddFollowUp allows at most one follow-up per main
+    // question, so one concept can't take over the round, skips it after a
+    // non-answer, and caps the total number of questions.
+    if (shouldAddFollowUp({
+      answeredQuestion: question,
+      followUpQuestion: result.followUpQuestion,
+      totalQuestions: session.questions.length,
+      score: result.score,
+    })) {
       session.questions.splice(Number(questionIndex) + 1, 0, {
         question: result.followUpQuestion.trim(),
-        category: "Follow-up",
+        category: FOLLOW_UP_CATEGORY,
         targetSkill: question.targetSkill,
       });
     }

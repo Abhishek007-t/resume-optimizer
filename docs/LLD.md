@@ -160,7 +160,7 @@ Before generating interview questions, `interviewController.js` gathers, in para
 - Latest `Analysis` (type `job-match`) → `rawAnalysis.missingSkills`
 - Completed `ProjectInterrogation` records for the resume → `weakClaims` (optionally filtered to one `focusProjectTitle` if the user picked a specific weak project to drill)
 
-These are compiled into a plain-text hint appended to the question-generation prompt, instructing the model to bias at least half the generated questions toward these known gaps. Degrades gracefully to an empty hint (and therefore fully generic questions) for a first-time user with no prior platform activity.
+These are compiled into a plain-text hint appended to the question-generation prompt. It is used only in a Technical round (`usesWeakAreas` in `services/interviewRules.js`), for at most 2 of the 6 questions (`MAX_WEAK_AREA_QUESTIONS`), each on a different feature and asked at fresher level. The generated set is then reordered so no two questions of the same category sit next to each other (`spreadByCategory`), and each main question gets at most one follow-up, with none after a non-answer scoring 20 or less (`shouldAddFollowUp`). Degrades gracefully to an empty hint (and therefore fully generic questions) for a first-time user with no prior platform activity.
 
 ### 3.7 LaTeX generation (`buildLatexResume`, frontend-only, zero backend involvement)
 - `escapeLatex`: single-pass character-map regex replace (not sequential `.replace()` calls) — avoids the classic bug where an escape's own output (e.g. `\textbackslash{}`) gets re-scanned and double-escaped by a later pass.

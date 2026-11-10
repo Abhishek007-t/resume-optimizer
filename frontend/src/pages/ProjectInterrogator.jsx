@@ -135,12 +135,19 @@ function ProjectInterrogator() {
   const visibleConversation = (interrogation?.conversation || []).filter((m) => !m.hidden);
   const isCompleted = interrogation?.status === "completed";
 
+  // Mirrors INTERROGATION_TOPICS / QUESTIONS_PER_TOPIC in backend/services/geminiService.js.
+  const TOTAL_TOPICS = 6;
+  const QUESTIONS_PER_TOPIC = 2;
+  const questionsAsked = visibleConversation.filter((m) => m.role !== "user").length;
+  const allTopicsCovered = questionsAsked > TOTAL_TOPICS * QUESTIONS_PER_TOPIC;
+  const currentTopic = Math.min(Math.floor((questionsAsked - 1) / QUESTIONS_PER_TOPIC) + 1, TOTAL_TOPICS);
+
   return (
     <div className="max-w-5xl mx-auto px-4 sm:px-6 py-8 animate-fade-in">
       <div className="text-center mb-8">
         <h1 className="text-3xl sm:text-4xl font-bold text-text-primary">Project Interrogator</h1>
         <p className="text-text-secondary mt-2">
-          An AI panelist cross-examines a project from your resume — the way a real interviewer would.
+          Practice explaining a project from your resume — an AI interviewer covers 6 topics, from the big picture to what you'd improve.
         </p>
       </div>
 
@@ -226,7 +233,11 @@ function ProjectInterrogator() {
             <div>
               <h2 className="text-lg font-bold text-text-primary">{interrogation.projectTitle}</h2>
               <p className="text-xs text-text-secondary">
-                {isCompleted ? "Session completed" : "Session in progress"}
+                {isCompleted
+                  ? "Session completed"
+                  : allTopicsCovered
+                    ? "All topics covered — click End & Grade for your report"
+                    : `Topic ${currentTopic} of ${TOTAL_TOPICS} · Question ${questionsAsked}`}
               </p>
             </div>
             <button

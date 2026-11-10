@@ -80,7 +80,7 @@ flowchart TD
     Interrogator -->|depth score| Readiness
 ```
 
-Every arrow above is a real, implemented data dependency (not aspirational) — e.g. Mock Interview's `startInterview` controller queries the latest Analysis, Job Match, and Project Interrogator records for the selected resume before generating questions, and biases at least half the question set toward those known gaps.
+Every arrow above is a real, implemented data dependency (not aspirational) — e.g. Mock Interview's `startInterview` controller queries the latest Analysis, Job Match, and Project Interrogator records for the selected resume before generating questions, and in a Technical round uses those known gaps for up to 2 of the 6 questions (see LLD §3.6).
 
 ## 7. Security Model
 

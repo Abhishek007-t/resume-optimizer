@@ -3,6 +3,14 @@ const { Type } = require('@google/genai');
 const axios = require('axios');
 const groqConfig = require('../config/groq');
 const { scoreSectionCompleteness } = require('../utils/parseabilityChecker');
+const { BASE_QUESTION_COUNT, MAX_WEAK_AREA_QUESTIONS, usesWeakAreas, spreadByCategory } = require('./interviewRules');
+const {
+    buildInterviewerGuide,
+    stripLeakedNotes,
+    endsInterview,
+    isUsableReply,
+    fallbackQuestion
+} = require('./interrogationGuide');
 
 const MODEL = 'gemini-3.5-flash-lite';
 
@@ -386,30 +394,73 @@ const extractProjects = async (extractedText) => {
     });
 };
 
-const INTERROGATION_SYSTEM_INSTRUCTION = `You are a technical interview panelist probing a college fresher — a final-year student or recent graduate, typically interviewing for an internship or entry-level role, not an experienced engineer — about ONE specific project from their resume. Calibrate your expectations accordingly: don't expect production-scale metrics, team-lead experience, or enterprise architecture decisions. Do expect them to genuinely understand what they personally built and be able to explain their own design choices, even in a small or simple project.
+const INTERROGATION_SYSTEM_INSTRUCTION = `You are a friendly but honest technical interviewer running a practice interview with a college fresher — a final-year student or recent graduate applying for an internship or entry-level role — about ONE project from their resume. Your goal is to check that they understand what they built and can explain it clearly, not to catch them out.
 
-Ask exactly ONE focused follow-up question per turn — never multiple questions at once. Every question must build directly on something specific the candidate just said in their previous answer — reference the exact claim, technology, or decision they mentioned rather than asking a generic question that could apply to any project. Target vague claims and unquantified results ("optimized", "improved", "built a scalable system") by asking for specifics: what exactly they built, why they chose that approach over alternatives they considered, what broke and how they debugged it, and their individual contribution versus any teammates'. If the candidate's last answer was still vague, say so directly in one sentence and ask again before moving to a new angle. Keep each question to 1-2 sentences. Stay strictly on the project described — never invent details about it that weren't given to you.`;
+How to ask:
+- Ask exactly ONE question per turn, in 1-2 short sentences of simple, everyday English.
+- Ask the kind of question a campus-placement interviewer asks a fresher: what it does, why they chose something, how it works, what went wrong, what they would change.
+- Do not ask about production-level concerns (timeouts, circuit breakers, scaling, load, distributed systems, exact API error fields, security edge cases) unless the candidate raised it themselves and the current topic calls for it.
+- Never build a question on a wrong assumption or a trick premise, and never chain "what if" scenarios.
+- Stay on the project as described — never invent details about it.
+
+Following the plan:
+- The "Current step" at the end of these instructions says exactly what to do on this turn. Always follow it, even if earlier turns went differently; it decides when to move to a new topic so the interview covers the whole project.
+- Never end the interview, say goodbye, or mention a feedback report unless the current step tells you to.
+- Your reply is only what you say out loud to the candidate. Never write plans, notes, steps or anything in square brackets.
+
+Every reply has two parts:
+1. A short, honest reaction to their last answer (one sentence at most) that matches its quality:
+   - Clear and on point: say so briefly, in your own words, and vary the wording from turn to turn.
+   - Vague, or didn't answer what you asked: say so kindly and name what was missing. Do not call it clear or good.
+   - They don't know or are stuck: don't push, but don't just reassure them either. Give a one-sentence hint that starts with "A good answer would mention" and names one or two concrete things from their project.
+2. The question for the current step. Every reply must end with exactly one question, except the final wrap-up. Never send a reply that is only a reaction.
+
+Don't lecture or give long feedback; detailed feedback comes in the final report.`;
+
+// The step changes every turn, so the system instruction is rebuilt per
+// request (each request already creates a fresh chat session).
+const buildInterrogationSystemInstruction = (questionsAsked) =>
+    `${INTERROGATION_SYSTEM_INSTRUCTION}\n\nCurrent step: ${buildInterviewerGuide(questionsAsked)}`;
 
 const buildKickoffMessage = (project) => `Project: ${project.title}
 Description: ${project.description}
 Tech stack: ${(project.techStack || []).join(', ')}
 
-Begin the interrogation now. Ask your first pointed question about this project.`;
+Begin the interview now.`;
 
-const startInterrogation = async (project) => {
-    const chat = createChatSession({ systemInstruction: INTERROGATION_SYSTEM_INSTRUCTION, temperature: 0.6 });
-    return sendMessageWithRetry(chat, buildKickoffMessage(project));
-};
-
-const continueInterrogation = async (history, userMessage) => {
+// Generates the panelist's next reply. A mid-interview reply that asks no
+// question or tries to end the interview is regenerated once with a
+// reminder (the extra AI call only happens then). If that also fails, a
+// ready-made question for the current topic is appended, so the interview
+// can never stall or end early.
+const generatePanelistReply = async ({ history, message, questionsAsked }) => {
     const seededHistory = history.map(({ role, text }) => ({ role, parts: [{ text }] }));
-    const chat = createChatSession({
-        systemInstruction: INTERROGATION_SYSTEM_INSTRUCTION,
-        temperature: 0.6,
-        history: seededHistory
-    });
-    return sendMessageWithRetry(chat, userMessage);
+    const systemInstruction = buildInterrogationSystemInstruction(questionsAsked);
+
+    const ask = async (instruction) => {
+        const chat = createChatSession({ systemInstruction: instruction, temperature: 0.6, history: seededHistory });
+        return stripLeakedNotes(await sendMessageWithRetry(chat, message));
+    };
+
+    const reply = await ask(systemInstruction);
+    if (isUsableReply(reply, questionsAsked)) return reply;
+
+    const retry = await ask(`${systemInstruction}\n\nImportant: the interview is still going. Your reply MUST end with exactly one question for the current step, and must not wrap up or mention a report.`);
+    if (isUsableReply(retry, questionsAsked)) return retry;
+
+    const reaction = endsInterview(reply) ? '' : `${reply} `;
+    return `${reaction}${fallbackQuestion(questionsAsked)}`.trim();
 };
+
+const startInterrogation = async (project) =>
+    generatePanelistReply({ history: [], message: buildKickoffMessage(project), questionsAsked: 0 });
+
+const continueInterrogation = async (history, userMessage) =>
+    generatePanelistReply({
+        history,
+        message: userMessage,
+        questionsAsked: history.filter((turn) => turn.role === 'model').length
+    });
 
 const WEAK_CLAIMS_SCHEMA = {
     type: Type.OBJECT,
@@ -578,12 +629,18 @@ const extractCertificationInfo = async (base64Data, mimeType) => {
 
 // ---- Mock Interview Simulator ----
 
-const QUESTION_GEN_SYSTEM_INSTRUCTION = `You are an experienced interviewer designing a mock interview round. Generate questions grounded in the candidate's actual resume and, if given, the specific job description — not generic questions any stranger's resume would also get. Vary difficulty and angle across the set. Phrase each question the way a real interviewer would actually ask it out loud in a conversation — natural and direct, not textbook-sounding. Vary sentence structure and opening phrasing across the set; do not start most questions with the same template (e.g. "Tell me about a time...") — that reads as a canned question bank, not a real interview.`;
+const QUESTION_GEN_SYSTEM_INSTRUCTION = `You are an experienced campus-placement interviewer designing a mock interview round for a college fresher — a final-year student or recent graduate applying for an internship or entry-level role, not an experienced engineer.
+
+Difficulty: every question must be one a well-prepared fresher can answer — what they built, why they made a choice, how something works, basic fundamentals, their goals and experiences. Never ask about system design, scaling, concurrency or race conditions, distributed systems, production metrics (hit rates, latency or throughput numbers), or exact API error codes. Ask in simple, everyday English, in one or two short sentences, and never build a question on an assumption or "what if" scenario.
+
+Coverage: the questions must each cover a different topic. Never ask two questions about the same feature, concept or project detail.
+
+Ground the questions in the candidate's actual resume and, if given, the job description, so they aren't generic. Phrase them the way a real interviewer would say them out loud, and vary the opening wording across the set instead of repeating one template like "Tell me about a time...".`;
 
 const ROUND_TYPE_GUIDANCE = {
-    HR: 'Focus on motivation, culture fit, career goals, and general communication — not technical depth.',
-    Technical: "Focus on the specific technologies, projects, and skills listed on the resume, plus core CS fundamentals relevant to the target role.",
-    Behavioral: 'Focus on past experiences using a STAR-style angle — teamwork, conflict, failure, leadership, ownership.'
+    HR: 'Focus on motivation, career goals, strengths and weaknesses, why this role, and general communication. Do not ask any technical questions.',
+    Technical: 'Use this mix: 2 questions about their projects (what it does, why they chose something, how a part works), 2 about technologies listed on their resume at a basic-to-intermediate level, and 2 core CS fundamentals at fresher level (for example OOP, DBMS basics, data structures, HTTP and REST).',
+    Behavioral: 'Use a STAR-style angle on situations a student actually has: college projects, team assignments, internships, clubs, deadlines, conflicts with teammates, mistakes they learned from. Do not ask about technical internals.'
 };
 
 const QUESTION_SET_SCHEMA = {
@@ -592,32 +649,40 @@ const QUESTION_SET_SCHEMA = {
         type: Type.OBJECT,
         properties: {
             question: { type: Type.STRING },
-            category: { type: Type.STRING, description: 'e.g. DSA, System Design, Past Project, Culture Fit, Conflict Resolution' },
+            category: { type: Type.STRING, description: 'e.g. Past Project, Tech Stack, CS Fundamentals, Motivation, Teamwork, Conflict Resolution' },
             targetSkill: { type: Type.STRING, description: 'The skill or trait this question is meant to probe' }
         },
         required: ['question', 'category', 'targetSkill']
     }
 };
 
-const buildQuestionGenPrompt = (resumeText, jobDescription, roundType, weakAreasHint) => `Generate 6 interview questions for a ${roundType} round.
+const buildQuestionGenPrompt = (resumeText, jobDescription, roundType, weakAreasHint) => {
+    const useWeakAreas = weakAreasHint && usesWeakAreas(roundType);
+    return `Generate exactly ${BASE_QUESTION_COUNT} interview questions for a ${roundType} round.
 
 ${ROUND_TYPE_GUIDANCE[roundType] || ''}
 
-${weakAreasHint ? `This candidate has known weak spots from prior activity on this platform — bias at least half the questions toward directly probing these, rather than generating generic questions that avoid them:\n${weakAreasHint}\n\n` : ''}${jobDescription ? `Target job description:\n${jobDescription}\n\n` : ''}Candidate resume:
+${useWeakAreas ? `This candidate has some known weak spots from earlier practice. Use them for at most ${MAX_WEAK_AREA_QUESTIONS} of the ${BASE_QUESTION_COUNT} questions. If you use two, they must be about different features (never two questions about the same feature, such as caching). Ask them at fresher level (for example "How did you check that your caching worked?", not "What was your cache hit rate?"). The other questions must cover other topics:\n${weakAreasHint}\n\n` : ''}${jobDescription ? `Target job description:\n${jobDescription}\n\n` : ''}Candidate resume:
 ${resumeText}`;
+};
 
 const generateInterviewQuestions = async (resumeText, jobDescription, roundType, weakAreasHint = '') => {
-    return generateStructuredJSON({
+    const questions = await generateStructuredJSON({
         prompt: buildQuestionGenPrompt(resumeText, jobDescription, roundType, weakAreasHint),
         systemInstruction: QUESTION_GEN_SYSTEM_INSTRUCTION,
         schema: QUESTION_SET_SCHEMA,
         temperature: 0.7
     });
+    return spreadByCategory(questions.slice(0, BASE_QUESTION_COUNT));
 };
 
-const ANSWER_SCORING_SYSTEM_INSTRUCTION = `You are an interview panelist scoring a candidate's written answer, in the middle of a live interview. Score honestly against a real hiring bar — do not inflate scores to be encouraging. Reward specificity, structure, and relevance; penalize vagueness and rambling.
+const ANSWER_SCORING_SYSTEM_INSTRUCTION = `You are an interview panelist scoring a college fresher's answer in the middle of a practice interview. Score against what a well-prepared fresher could realistically say, not a senior engineer. Be honest, not inflated:
+- Clear, correct and specific, with an example from their own work: 75-95, even without production metrics.
+- Partly right, or correct but generic: 50-74.
+- Vague, off-topic or rambling: 25-49.
+- "I don't know", or no real answer: 0-20.
 
-You also decide whether a real interviewer would follow up on this specific answer right now, rather than moving straight to the next scripted question — this is what makes an interview feel real instead of like a static quiz. Ask a follow-up when the answer was vague, left an obvious gap, or mentioned something specific worth digging into (a number, a decision, a tool, a tradeoff). Do not ask a follow-up when the answer was already clear and complete — real interviewers move on when they're satisfied, not after every answer. When you do ask one, it must reference the specific thing the candidate said, in one natural sentence, the way an interviewer would actually say it out loud (e.g. "You mentioned X — what made you choose that over Y?"), not a generic "can you elaborate?".`;
+You also decide whether a real interviewer would ask one follow-up on this answer before moving on. Ask one only when the answer was vague, left an obvious gap, or mentioned something worth a quick check. If the answer was already clear and complete, return an empty string: real interviewers move on when they're satisfied. A follow-up must be one short, simple sentence a fresher can answer, referencing what they actually said (for example "You mentioned MongoDB — why did you pick it over SQL?"). Never ask about scaling, concurrency, distributed systems, production metrics or exact error codes.`;
 
 const ANSWER_SCORE_SCHEMA = {
     type: Type.OBJECT,
@@ -672,7 +737,7 @@ ${transcript}`;
 const summarizeInterviewSession = async (questions) => {
     return generateStructuredJSON({
         prompt: buildSessionSummaryPrompt(questions),
-        systemInstruction: 'You are summarizing a completed mock interview session for the candidate.',
+        systemInstruction: 'You are summarizing a completed mock interview session for a college fresher. Judge them against what a well-prepared fresher could realistically answer, not an experienced engineer. Be honest and specific, and end the summary with one concrete thing to practice next.',
         schema: SESSION_SUMMARY_SCHEMA,
         temperature: 0.3
     });
