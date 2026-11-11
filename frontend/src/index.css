@@ -1,0 +1,262 @@
+@import "tailwindcss";
+
+/* "Ledger" palette — a calm, confident scheme for a serious placement-prep
+   tool: cool graphite instead of near-black, a muted steel-teal primary
+   instead of the generic indigo/purple, and a warm bronze secondary instead
+   of neon mint. No purple-to-teal gradient anywhere in this file. */
+@theme {
+  --color-primary: #3E7C74;
+  --color-primary-hover: #4A9186;
+  --color-secondary: #B8935A;
+  --color-secondary-hover: #C9A56E;
+  --color-bg-dark: #0B0E13;
+  --color-bg-card: #151920;
+  --color-bg-card-hover: #1C212A;
+  --color-text-primary: #E4E7EB;
+  --color-text-secondary: #8B92A0;
+  --color-border: rgba(255, 255, 255, 0.08);
+  --color-success: #4F9B72;
+  --color-warning: #C2914A;
+  --color-danger: #B5555A;
+  --font-family-inter: 'Inter', sans-serif;
+  --font-family-display: 'Newsreader', Georgia, serif;
+}
+
+/* Global resets */
+*, *::before, *::after {
+  box-sizing: border-box;
+}
+
+body {
+  font-family: 'Inter', sans-serif;
+  background-color: #0B0E13;
+  color: #E4E7EB;
+  min-height: 100vh;
+  margin: 0;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+/* Headings get a distinct editorial serif — the single biggest lever for
+   not looking like every other AI-generated Inter-everywhere interface. */
+h1, h2, h3 {
+  font-family: 'Newsreader', Georgia, serif;
+  font-weight: 600;
+  letter-spacing: -0.01em;
+}
+
+/* Custom scrollbar */
+::-webkit-scrollbar {
+  width: 6px;
+}
+::-webkit-scrollbar-track {
+  background: #0B0E13;
+}
+::-webkit-scrollbar-thumb {
+  background: #232833;
+  border-radius: 3px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: #2E3441;
+}
+
+/* Animations */
+@keyframes fadeIn {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+@keyframes slideUp {
+  from { opacity: 0; transform: translateY(20px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+@keyframes pulseGlow {
+  0%, 100% { box-shadow: 0 0 5px rgba(62, 124, 116, 0.3); }
+  50% { box-shadow: 0 0 20px rgba(62, 124, 116, 0.6); }
+}
+
+@keyframes scoreFill {
+  from { stroke-dashoffset: 283; }
+}
+
+@keyframes spin {
+  to { transform: rotate(360deg); }
+}
+
+@keyframes shimmer {
+  0% { background-position: -200% 0; }
+  100% { background-position: 200% 0; }
+}
+
+/* Utility classes */
+.animate-fade-in {
+  animation: fadeIn 0.5s ease-out forwards;
+}
+
+.animate-slide-up {
+  animation: slideUp 0.5s ease-out forwards;
+}
+
+.animate-pulse-glow {
+  animation: pulseGlow 2s infinite;
+}
+
+.animate-spin-slow {
+  animation: spin 1s linear infinite;
+}
+
+/* Glass card — deliberately subtler than a typical glassmorphism default:
+   less blur, less opacity, so it reads as a quiet surface rather than the
+   heavy frosted-glass look used as the default everywhere in most AI-built
+   dark UIs. */
+.glass-card {
+  background: rgba(255, 255, 255, 0.03);
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 0.75rem;
+}
+
+.glass-card:hover {
+  background: rgba(255, 255, 255, 0.05);
+  border-color: rgba(255, 255, 255, 0.12);
+}
+
+/* Score circle */
+.score-circle-bg {
+  fill: none;
+  stroke: rgba(255, 255, 255, 0.1);
+  stroke-width: 8;
+}
+
+.score-circle-fill {
+  fill: none;
+  stroke-width: 8;
+  stroke-linecap: round;
+  transform: rotate(-90deg);
+  transform-origin: 50% 50%;
+  transition: stroke-dashoffset 1.5s ease-out;
+}
+
+/* Tags */
+.tag-found {
+  background: rgba(79, 155, 114, 0.15);
+  color: #4F9B72;
+  border: 1px solid rgba(79, 155, 114, 0.3);
+  padding: 4px 12px;
+  border-radius: 9999px;
+  font-size: 0.8rem;
+  font-weight: 500;
+}
+
+.tag-missing {
+  background: rgba(181, 85, 90, 0.15);
+  color: #B5555A;
+  border: 1px solid rgba(181, 85, 90, 0.3);
+  padding: 4px 12px;
+  border-radius: 9999px;
+  font-size: 0.8rem;
+  font-weight: 500;
+}
+
+.tag-warning {
+  background: rgba(194, 145, 74, 0.15);
+  color: #C2914A;
+  border: 1px solid rgba(194, 145, 74, 0.3);
+  padding: 4px 12px;
+  border-radius: 9999px;
+  font-size: 0.8rem;
+  font-weight: 500;
+}
+
+/* Stat card */
+.stat-card {
+  background: rgba(255, 255, 255, 0.03);
+  backdrop-filter: blur(6px);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 0.75rem;
+  padding: 1.5rem;
+  transition: all 0.3s ease;
+}
+
+.stat-card:hover {
+  transform: translateY(-4px);
+  background: rgba(255, 255, 255, 0.05);
+  box-shadow: 0 8px 32px rgba(62, 124, 116, 0.15);
+}
+
+/* Button glow */
+.btn-glow {
+  position: relative;
+  overflow: hidden;
+  transition: all 0.3s ease;
+}
+
+.btn-glow:hover {
+  box-shadow: 0 0 16px rgba(62, 124, 116, 0.35);
+  transform: translateY(-1px);
+}
+
+.btn-glow:active {
+  transform: translateY(0);
+}
+
+/* Skeleton loading */
+.skeleton {
+  background: linear-gradient(90deg, #151920 25%, #1C212A 50%, #151920 75%);
+  background-size: 200% 100%;
+  animation: shimmer 1.5s infinite;
+  border-radius: 0.5rem;
+}
+
+/* Drag and drop zone */
+.drop-zone {
+  border: 2px dashed rgba(62, 124, 116, 0.4);
+  border-radius: 0.75rem;
+  transition: all 0.3s ease;
+}
+
+.drop-zone:hover,
+.drop-zone.drag-over {
+  border-color: #3E7C74;
+  background: rgba(62, 124, 116, 0.05);
+  box-shadow: 0 0 20px rgba(62, 124, 116, 0.1);
+}
+
+/* Severity badges */
+.severity-high {
+  background: rgba(181, 85, 90, 0.2);
+  color: #B5555A;
+  border: 1px solid rgba(181, 85, 90, 0.3);
+}
+
+.severity-medium {
+  background: rgba(194, 145, 74, 0.2);
+  color: #C2914A;
+  border: 1px solid rgba(194, 145, 74, 0.3);
+}
+
+.severity-low {
+  background: rgba(79, 155, 114, 0.2);
+  color: #4F9B72;
+  border: 1px solid rgba(79, 155, 114, 0.3);
+}
+
+/* Smooth transitions on all interactive elements */
+a, button, input, textarea, select {
+  transition: all 0.2s ease;
+}
+
+input:focus, textarea:focus, select:focus {
+  outline: none;
+  box-shadow: 0 0 0 2px rgba(62, 124, 116, 0.3);
+}
+
+/* Gradient text utility */
+.gradient-text {
+  background: linear-gradient(135deg, #3E7C74, #B8935A);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+}
